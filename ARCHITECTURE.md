@@ -45,7 +45,7 @@ There is one canonical implementation. It's deterministic and fully unit-tested,
    - Default weights: Ambience 20, Drinks 20, Food 15, Value 20, Service 15, Overall 10.
    - Detailed metrics (beer selection, music, parking…) are stored and shown, but never enter the composite.
 3. **Personal place score** = arithmetic mean of the user's visit composites, using the user's own weights. The latest visit score and the trend (latest − previous) are shown separately.
-4. **Community average** = mean over reviewers of each reviewer's place score, using default weights. Someone who logs 20 visits counts once.
+4. **Community average** = mean over reviewers of each reviewer's place score, using default weights, from **public** visits only. Someone who logs 20 visits counts once.
 5. **Discovery order** uses a Bayesian-smoothed score, `(C·m + n·avg)/(C+n)` with `m = 7.0`, `C = 3`, so one perfect 10 doesn't outrank twenty 9s. The **raw average and reviewer count are always displayed**, and "early score" is noted under 3 reviewers.
 6. **Determinism:** integer weights and half-point scores let us compute in integers and round half-up to 2 decimals. `public.aour_composite()` and `aour_refresh_establishment_stats()` do the same in SQL, and `tests/db/rating-integrity.test.ts` checks 300 random cases plus random visit sets for **exact** equality.
 
@@ -69,9 +69,9 @@ Personal rankings are computed **on the client** from the user's visits. That's 
 - **Column grants** stop users writing `role`, `suspended_at`, `reviews.status`, `visits.excluded_from_community` or `collections.featured_at`, even on their own rows.
 - **Admin actions** are `SECURITY DEFINER` RPCs that call `aour_require_admin()` and write to `moderation_actions`.
 - **Abuse controls:**
-  - Per-user rate limits (40 visits/day, 20 reports/day, 10 submissions/day, 200 follows/day, 30 collections/day).
+  - Per-user rate limits (40 visits/day, 20 reports/day, 10 submissions/day, 200 follows/day, 30 collections/day), counted in an append-only `rate_limit_events` log so deleting and re-creating rows can't reset them.
   - Link-spam guard on reviews.
-  - Three reports auto-hide a review until an admin decides.
+  - Three open reports auto-hide a review until an admin decides. Authors can't delete a moderated review (or its visit) and re-post it.
   - Three distinct "outdated" reports downgrade a verified listing. It can only become *less* authoritative this way.
   - Suspended users can't write and disappear from public views.
 - **Location privacy:** device location is requested only on demand, rounded to about 1 km, used on-device, and never sent or stored.

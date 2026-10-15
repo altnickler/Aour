@@ -270,7 +270,7 @@ export class DemoApi implements Api {
 
   private withCommunity(e: StoredEstablishment): Establishment {
     const contributing = this.state.visits.filter((v) => {
-      if (v.establishmentId !== e.id || v.excluded) return false
+      if (v.establishmentId !== e.id || v.excluded || v.visibility !== 'public') return false
       const p = this.user(v.userId)?.profile
       return !!p && p.contributeToCommunity && !p.suspended
     })
@@ -416,7 +416,7 @@ export class DemoApi implements Api {
   }
 
   async updateMyProfile(patch: Partial<Profile>) {
-    const me = this.me()
+    const me = this.activeMe()
     if (patch.username !== undefined) {
       const err = validateUsername(patch.username)
       if (err) throw new ApiError(err)
@@ -439,7 +439,7 @@ export class DemoApi implements Api {
   }
 
   async savePreferences(prefs: Preferences) {
-    const me = this.me()
+    const me = this.activeMe()
     const v = validateWeights(prefs.weights)
     if (!v.ok) throw new ApiError(v.error!)
     this.state.prefs[me.id] = prefs
@@ -475,6 +475,8 @@ export class DemoApi implements Api {
     if (review && (review.match(/(https?:\/\/|www\.)/gi)?.length ?? 0) > 1) throw new ApiError('Reviews can include at most one link.')
     const existing = input.id ? this.state.visits.find((v) => v.id === input.id && v.userId === me.id) : undefined
     if (input.id && !existing) throw new ApiError('Visit not found.')
+    const moderated = existing?.review && existing.reviewStatus && existing.reviewStatus !== 'published'
+    const keptReview = !review && moderated ? existing!.review : review
     const visit: State['visits'][number] = {
       id: existing?.id ?? id(),
       userId: me.id,
@@ -484,8 +486,8 @@ export class DemoApi implements Api {
       scores: { ...input.scores },
       tags: [...new Set(input.tags)],
       note: input.note?.trim() || null,
-      review,
-      reviewStatus: review ? (existing?.reviewStatus ?? 'published') : null,
+      review: keptReview,
+      reviewStatus: keptReview ? (existing?.reviewStatus ?? 'published') : null,
       visibility: input.visibility,
       photoUrls,
       createdAt: existing?.createdAt ?? now,
@@ -500,6 +502,10 @@ export class DemoApi implements Api {
 
   async deleteVisit(visitId: string) {
     const me = this.me()
+    const v = this.state.visits.find((x) => x.id === visitId)
+    if (v && v.userId === me.id && me.profile.role !== 'admin' && v.reviewStatus && v.reviewStatus !== 'published') {
+      throw new ApiError("This rating's review is under moderation, so it can't be deleted right now.")
+    }
     this.state.visits = this.state.visits.filter((v) => !(v.id === visitId && (v.userId === me.id || me.profile.role === 'admin')))
     this.persist()
   }
@@ -571,6 +577,7 @@ export class DemoApi implements Api {
     const me = this.activeMe()
     const c = this.state.collections.find((x) => x.id === collectionId && x.userId === me.id)
     if (!c) throw new ApiError('Collection not found.')
+    if (included && !this.state.establishments.some((e) => e.id === establishmentId && e.status === 'published')) throw new ApiError('That place is not available.')
     c.items = c.items.filter((i) => i.establishmentId !== establishmentId)
     if (included) c.items.push({ establishmentId, note: null, position: c.items.length })
     c.updatedAt = new Date().toISOString()
@@ -686,12 +693,16 @@ export class DemoApi implements Api {
     if (this.state.reports.some((r) => r.visitId === visitId && r.reporterId === me.id)) throw new ApiError("You've already reported this.")
     this.state.reports.push({ id: id(), visitId, reporterId: me.id, reason, details, status: 'open', createdAt: new Date().toISOString() })
     v.reportCount = (v.reportCount ?? 0) + 1
-    if (v.reportCount >= 3 && v.reviewStatus === 'published') v.reviewStatus = 'hidden'
+    const open = this.state.reports.filter((r) => r.visitId === visitId && r.status === 'open').length
+    if (open >= 3 && v.reviewStatus === 'published') v.reviewStatus = 'hidden'
     this.persist()
   }
 
   async submit(kind: Submission['kind'], establishmentId: string | null, payload: Record<string, string>) {
     const me = this.activeMe()
+    if (establishmentId && !this.state.establishments.some((e) => e.id === establishmentId && (e.status === 'published' || me.profile.role === 'admin'))) {
+      throw new ApiError('That place is not available.')
+    }
     if (this.state.submissions.filter((s) => s.userId === me.id && s.createdAt > iso(DAY)).length >= 10) {
       throw new ApiError("You're doing that a lot — please try again later.")
     }

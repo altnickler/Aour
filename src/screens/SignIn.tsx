@@ -35,7 +35,7 @@ export default function SignInScreen() {
 
   useEffect(() => {
     // Only allow same-site relative redirects.
-    if (user) navigate(next.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true })
+    if (user) navigate(safeNext(next), { replace: true })
   }, [user, next, navigate])
 
   useEffect(() => {
@@ -163,4 +163,15 @@ export default function SignInScreen() {
       </div>
     </div>
   )
+}
+
+/** Only same-origin, path-only redirects (rejects //host, /\\host, schemes). */
+function safeNext(next: string): string {
+  if (!next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return '/'
+  try {
+    const u = new URL(next, window.location.origin)
+    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : '/'
+  } catch {
+    return '/'
+  }
 }

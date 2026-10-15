@@ -354,3 +354,82 @@ describe('following list', () => {
     await rejects(as(pool, null, (c) => c.query(`select public.my_following()`)))
   })
 })
+
+describe('review findings (regressions)', () => {
+  it('a moderated review cannot be deleted and re-posted as published', async () => {
+    const u = await createUser(pool, 'repost@example.com')
+    const v = await saveVisit(pool, u, { establishment_id: place, scores: { overall: 5 }, review: 'buy my stuff' })
+    await as(pool, admin, (c) => c.query(`select public.admin_moderate_review($1, 'removed')`, [v]))
+    // Direct delete of the review row: blocked by RLS (0 rows).
+    const del = await as(pool, u, (c) => c.query(`delete from public.reviews where visit_id = $1`, [v]))
+    expect(del.rowCount).toBe(0)
+    // Clearing the text via save_visit keeps the moderated row.
+    await saveVisit(pool, u, { id: v, establishment_id: place, scores: { overall: 5 }, review: '' })
+    await saveVisit(pool, u, { id: v, establishment_id: place, scores: { overall: 5 }, review: 'buy my stuff again' })
+    const { rows } = await pool.query(`select status from public.reviews where visit_id = $1`, [v])
+    expect(rows[0].status).toBe('removed')
+    // Deleting the whole visit is blocked too.
+    const delVisit = await as(pool, u, (c) => c.query(`delete from public.visits where id = $1`, [v]))
+    expect(delVisit.rowCount).toBe(0)
+  })
+
+  it('a restored review is not re-hidden by a single new report', async () => {
+    const author = await createUser(pool, 'restored@example.com')
+    const v = await saveVisit(pool, author, { establishment_id: place, scores: { overall: 8 }, review: 'Legit review' })
+    const reporters = await Promise.all(['r1', 'r2', 'r3', 'r4'].map((x) => createUser(pool, `${x}-restore@example.com`)))
+    for (const r of reporters.slice(0, 3)) {
+      await as(pool, r, (c) => c.query(`insert into public.review_reports (visit_id, reporter_id, reason) values ($1, $2, 'spam')`, [v, r]))
+    }
+    expect((await pool.query(`select status from public.reviews where visit_id = $1`, [v])).rows[0].status).toBe('hidden')
+    await as(pool, admin, (c) => c.query(`select public.admin_moderate_review($1, 'published')`, [v]))
+    await as(pool, reporters[3], (c) => c.query(`insert into public.review_reports (visit_id, reporter_id, reason) values ($1, $2, 'spam')`, [v, reporters[3]]))
+    expect((await pool.query(`select status from public.reviews where visit_id = $1`, [v])).rows[0].status).toBe('published')
+  })
+
+  it('private ratings never feed public community stats', async () => {
+    const p = await createEstablishment(pool)
+    const u = await createUser(pool, 'privaterater@example.com')
+    const v = await saveVisit(pool, u, { establishment_id: p, scores: { drinks: 3, food: 9.5 }, tags: ['quiet'], visibility: 'private' })
+    const s = await as(pool, null, (c) => c.query(`select * from public.establishment_stats where establishment_id = $1`, [p]).then((r) => r.rows[0]))
+    expect(s).toMatchObject({ reviewers: 0, visit_count: 0, average: null, category_averages: {}, top_tags: [] })
+    await saveVisit(pool, u, { id: v, establishment_id: p, scores: { drinks: 3, food: 9.5 }, visibility: 'public' })
+    expect((await pool.query(`select reviewers from public.establishment_stats where establishment_id = $1`, [p])).rows[0].reviewers).toBe(1)
+  })
+
+  it('suspended users cannot edit their profile or preferences', async () => {
+    const u = await createUser(pool, 'suspendme@example.com')
+    await as(pool, admin, (c) => c.query(`select public.admin_set_suspended($1, true, 'spam')`, [u]))
+    await rejects(as(pool, u, (c) => c.query(`update public.profiles set bio = 'still here' where id = $1`, [u])))
+    await rejects(
+      as(pool, u, (c) => c.query(`insert into public.user_preferences (user_id, weights) values ($1, $2)`, [u, { ambience: 1, drinks: 1, food: 1, value: 1, service: 1, overall: 1 }])),
+    )
+  })
+
+  it('rate limits cannot be reset by deleting and re-inserting', async () => {
+    const u = await createUser(pool, 'churn@example.com')
+    const target = await createUser(pool, 'churntarget@example.com')
+    let blocked = false
+    for (let i = 0; i < 205 && !blocked; i++) {
+      try {
+        await as(pool, u, async (c) => {
+          await c.query(`insert into public.follows (follower_id, followee_id) values ($1, $2)`, [u, target])
+          await c.query(`delete from public.follows where follower_id = $1 and followee_id = $2`, [u, target])
+        })
+      } catch (e) {
+        expect(String(e)).toMatch(/try again later/)
+        blocked = true
+      }
+    }
+    expect(blocked).toBe(true)
+    // The event log itself is invisible to clients.
+    await rejects(as(pool, u, (c) => c.query(`select * from public.rate_limit_events`)))
+  })
+
+  it('users cannot report or collect unpublished listings', async () => {
+    const u = await createUser(pool, 'draftpoker@example.com')
+    await rejects(as(pool, u, (c) => c.query(`insert into public.establishment_submissions (kind, establishment_id, user_id) values ('outdated', $1, $2)`, [draft, u])))
+    const col = await as(pool, u, (c) => c.query(`insert into public.collections (user_id, name) values ($1, 'x') returning id`, [u]).then((r) => r.rows[0].id))
+    await rejects(as(pool, u, (c) => c.query(`insert into public.collection_items (collection_id, establishment_id) values ($1, $2)`, [col, draft])))
+    await rejects(as(pool, u, (c) => c.query(`update public.visit_tags set tag = 'quiet'`)))
+  })
+})

@@ -57,8 +57,8 @@ export default function SettingsScreen() {
                 </div>
                 <div className="border-t border-line">
                   <Toggle
-                    label="Count my scores in community ratings"
-                    description="Anonymously include your scores in each place's community average."
+                    label="Count my public ratings in community scores"
+                    description="Anonymously include your public ratings in each place's community average. Private ratings are never included."
                     checked={profile.contributeToCommunity}
                     onChange={(v) => update.mutate({ contributeToCommunity: v })}
                   />

@@ -103,7 +103,12 @@ function RateForm({ place, existing, defaultVisibility }: { place: Establishment
     }
   }, [draft, draftKey, existing, result])
 
-  useEffect(() => () => newPhotos.forEach((p) => URL.revokeObjectURL(p.url)), [newPhotos])
+  // Revoke preview URLs on unmount only (revoking on every change broke visible thumbnails).
+  const photosRef = useRef(newPhotos)
+  useEffect(() => {
+    photosRef.current = newPhotos
+  }, [newPhotos])
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), [])
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
   const setScore = (key: string, v: number | null | undefined) => setDraft((d) => ({ ...d, scores: { ...d.scores, [key]: v } }))
@@ -279,7 +284,7 @@ function RateForm({ place, existing, defaultVisibility }: { place: Establishment
                   <PhotoThumb key={u} url={u} onRemove={() => set({ keepPhotos: draft.keepPhotos.filter((x) => x !== u) })} />
                 ))}
                 {newPhotos.map((p) => (
-                  <PhotoThumb key={p.url} url={p.url} onRemove={() => setNewPhotos((list) => list.filter((x) => x !== p))} />
+                  <PhotoThumb key={p.url} url={p.url} onRemove={() => { URL.revokeObjectURL(p.url); setNewPhotos((list) => list.filter((x) => x !== p)) }} />
                 ))}
                 {draft.keepPhotos.length + newPhotos.length < 4 && (
                   <button type="button" onClick={() => fileInput.current?.click()} className="press flex size-20 flex-col items-center justify-center gap-1 rounded-tile bg-cream-deep text-xs font-semibold text-choc">
@@ -324,7 +329,7 @@ function RateForm({ place, existing, defaultVisibility }: { place: Establishment
             ]}
           />
           <p className="pb-1 text-xs text-muted">
-            {draft.visibility === 'public' ? 'Shown on your profile and to people who follow you.' : 'Still counts in your rankings. Hidden from everyone else.'}
+            {draft.visibility === 'public' ? 'Shown on your profile and included in community scores.' : 'Still counts in your rankings. Hidden from everyone else and left out of community scores.'}
           </p>
         </div>
 

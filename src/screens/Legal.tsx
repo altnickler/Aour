@@ -31,7 +31,7 @@ function Privacy() {
       <h2>What others can see</h2>
       <p>With a public profile, people can see your profile, public ratings, reviews, favorites and public collections. Private ratings, private notes and private collections are visible only to you. You can make your whole profile private in Settings.</p>
       <h2>Community scores</h2>
-      <p>Unless you turn it off in Settings, your scores are included anonymously in each place’s community averages.</p>
+      <p>Unless you turn it off in Settings, the scores from your <b>public</b> ratings are included anonymously in each place’s community averages. Private ratings are never included.</p>
       <h2>Sharing</h2>
       <p>We don’t sell your personal information or share it with advertisers. We use service providers (hosting, database, email delivery) who process data on our behalf.</p>
       <h2>Your choices</h2>

@@ -114,6 +114,7 @@ begin
     from public.visits v
     join public.profiles p on p.id = v.user_id
     where v.establishment_id = p_establishment
+      and v.visibility = 'public'           -- private ratings never feed public stats
       and not v.excluded_from_community
       and p.contribute_to_community
       and p.suspended_at is null
@@ -297,7 +298,18 @@ create trigger on_auth_user_created after insert on auth.users
 -- ---------------------------------------------------------------------------
 -- Abuse prevention
 -- ---------------------------------------------------------------------------
--- Generic per-user rate limit: tg_argv = (user column, max rows, window interval).
+-- Append-only log of rate-limited actions. Counting rows that still exist would let
+-- users reset limits by deleting and re-inserting, so we count events instead.
+-- No policies: clients can't read or write it; only the trigger below (definer) can.
+create table public.rate_limit_events (
+  user_id uuid not null,
+  action text not null,
+  created_at timestamptz not null default now()
+);
+create index rate_limit_events_idx on public.rate_limit_events (user_id, action, created_at desc);
+alter table public.rate_limit_events enable row level security;
+
+-- Generic per-user rate limit: tg_argv = (user column, max events, window interval).
 create function public.aour_rate_limit() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -310,11 +322,14 @@ begin
   -- Server-side jobs (no end-user JWT) and admins are exempt.
   if auth.uid() is null or public.aour_is_admin() then return new; end if;
   execute format('select ($1).%I', col) into uid using new;
-  execute format('select count(*) from %I.%I where %I = $1 and created_at > now() - $2', tg_table_schema, tg_table_name, col)
-    into n using uid, win;
+  select count(*) into n from public.rate_limit_events
+   where user_id = uid and action = tg_table_name and created_at > now() - win;
   if n >= max_rows then
     raise exception 'You''re doing that a lot — please try again later.' using errcode = 'P0429';
   end if;
+  insert into public.rate_limit_events (user_id, action) values (uid, tg_table_name);
+  -- Opportunistic cleanup keeps the log small.
+  delete from public.rate_limit_events where user_id = uid and action = tg_table_name and created_at < now() - interval '2 days';
   return new;
 end $$;
 
@@ -347,7 +362,11 @@ language plpgsql security definer set search_path = '' as $$
 begin
   update public.reviews
      set report_count = report_count + 1,
-         status = case when status = 'published' and report_count + 1 >= 3 then 'hidden'::public.review_status else status end
+         status = case
+           when status = 'published' and (
+             select count(*) from public.review_reports r where r.visit_id = new.visit_id and r.status = 'open'
+           ) >= 3 then 'hidden'::public.review_status
+           else status end
    where visit_id = new.visit_id;
   return null;
 end $$;
@@ -396,7 +415,8 @@ grant select on public.visits, public.rating_scores, public.visit_tags, public.v
 grant insert (id, user_id, establishment_id, visited_on, mode, visibility) on public.visits to authenticated;
 grant update (visited_on, mode, visibility) on public.visits to authenticated;
 grant delete on public.visits to authenticated;
-grant insert, update, delete on public.rating_scores, public.visit_tags to authenticated;
+grant insert, update, delete on public.rating_scores to authenticated;
+grant insert, delete on public.visit_tags to authenticated;
 grant insert, delete on public.visit_photos to authenticated;
 grant select, insert, update, delete on public.visit_notes to authenticated;
 grant insert (visit_id, user_id, establishment_id, body) on public.reviews to authenticated;
@@ -456,7 +476,7 @@ create policy "tags readable" on public.tags for select using (true);
 create policy "profiles self read" on public.profiles for select to authenticated
   using (id = auth.uid() or public.aour_is_admin());
 create policy "profiles self update" on public.profiles for update to authenticated
-  using (id = auth.uid()) with check (id = auth.uid());
+  using (id = auth.uid()) with check (id = auth.uid() and public.aour_is_active());
 
 -- Establishments: public sees published; admins manage everything.
 create policy "establishments readable" on public.establishments for select
@@ -482,7 +502,7 @@ create policy "listing_sources admin read" on public.listing_sources for select 
 
 -- Preferences: owner only.
 create policy "preferences owner" on public.user_preferences for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = auth.uid()) with check (user_id = auth.uid() and public.aour_is_active());
 
 -- Visits
 create policy "visits readable" on public.visits for select using (
@@ -497,8 +517,15 @@ create policy "visits owner insert" on public.visits for insert to authenticated
 );
 create policy "visits owner update" on public.visits for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid() and public.aour_is_active());
+-- A visit whose review is under moderation can't be deleted by its author (that would
+-- let them re-post the same text as a fresh, published review). Account deletion and
+-- admins are unaffected.
 create policy "visits owner delete" on public.visits for delete to authenticated
-  using (user_id = auth.uid() or public.aour_is_admin());
+  using (
+    public.aour_is_admin()
+    or (user_id = auth.uid()
+        and not exists (select 1 from public.reviews r where r.visit_id = visits.id and r.status <> 'published'))
+  );
 
 do $$
 declare t text;
@@ -530,7 +557,7 @@ create policy "reviews owner insert" on public.reviews for insert to authenticat
 create policy "reviews owner update" on public.reviews for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid() and public.aour_is_active());
 create policy "reviews owner delete" on public.reviews for delete to authenticated
-  using (user_id = auth.uid() or public.aour_is_admin());
+  using ((user_id = auth.uid() and status = 'published') or public.aour_is_admin());
 
 -- Social
 create policy "follows involved" on public.follows for select to authenticated
@@ -554,7 +581,10 @@ create policy "collections owner delete" on public.collections for delete to aut
 
 create policy "collection_items readable" on public.collection_items for select
   using (exists (select 1 from public.collections c where c.id = collection_id));
-create policy "collection_items owner insert" on public.collection_items for insert to authenticated with check (public.aour_owns_collection(collection_id));
+create policy "collection_items owner insert" on public.collection_items for insert to authenticated with check (
+  public.aour_owns_collection(collection_id)
+  and exists (select 1 from public.establishments e where e.id = establishment_id) -- RLS: published only
+);
 create policy "collection_items owner update" on public.collection_items for update to authenticated using (public.aour_owns_collection(collection_id)) with check (public.aour_owns_collection(collection_id));
 create policy "collection_items owner delete" on public.collection_items for delete to authenticated using (public.aour_owns_collection(collection_id));
 
@@ -569,7 +599,10 @@ create policy "reports insert" on public.review_reports for insert to authentica
 create policy "submissions own or admin" on public.establishment_submissions for select to authenticated
   using (user_id = auth.uid() or public.aour_is_admin());
 create policy "submissions insert" on public.establishment_submissions for insert to authenticated
-  with check (user_id = auth.uid() and public.aour_is_active());
+  with check (
+    user_id = auth.uid() and public.aour_is_active()
+    and (establishment_id is null or exists (select 1 from public.establishments e where e.id = establishment_id))
+  );
 
 create policy "moderation admin read" on public.moderation_actions for select to authenticated using (public.aour_is_admin());
 
@@ -645,7 +678,8 @@ begin
   end if;
 
   if nullif(trim(p ->> 'review'), '') is null then
-    delete from public.reviews where visit_id = v_id;
+    -- Moderated (hidden/removed) reviews stay put so they can't be re-posted as new.
+    delete from public.reviews where visit_id = v_id and status = 'published';
   else
     insert into public.reviews (visit_id, user_id, establishment_id, body)
     values (v_id, v_uid, v_est, trim(p ->> 'review'))
@@ -857,7 +891,8 @@ language sql stable security definer set search_path = '' as $$
   from public.visits v
   join public.follows f on f.followee_id = v.user_id and f.follower_id = auth.uid()
   join public.profiles p on p.id = v.user_id and p.visibility = 'public' and p.suspended_at is null
-  where v.visibility = 'public' and v.created_at > now() - make_interval(days => least(p_days, 90))
+  where v.visibility = 'public' and not v.excluded_from_community
+    and v.created_at > now() - make_interval(days => least(p_days, 90))
 $$;
 
 -- ---------------------------------------------------------------------------

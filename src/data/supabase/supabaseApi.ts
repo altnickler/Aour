@@ -294,6 +294,7 @@ export class SupabaseApi implements Api {
     const rows = await this.rpc<Row[]>('establishment_reviews', {
       p_establishment: establishmentId,
       p_following_only: !!opts.followingOnly,
+      p_limit: opts.followingOnly ? 50 : 20,
       p_before: opts.before ?? null,
     })
     return rows.map(this.mapReview)
@@ -382,8 +383,12 @@ export class SupabaseApi implements Api {
       uploaded.push(path)
     }
     const kept = (input.keepPhotoUrls ?? []).map((u) => this.pathFromUrl('visit-photos', u)).filter((p): p is string => !!p)
+    const before = input.id
+      ? check(await this.client.from('visit_photos').select('storage_path').eq('visit_id', input.id)).map((r: Row) => r.storage_path as string)
+      : []
+    let id: string
     try {
-      return await this.rpc<string>('save_visit', {
+      id = await this.rpc<string>('save_visit', {
         p: {
           id: input.id ?? null,
           establishment_id: input.establishmentId,
@@ -401,11 +406,16 @@ export class SupabaseApi implements Api {
       if (uploaded.length) await this.client.storage.from('visit-photos').remove(uploaded)
       throw e
     }
+    // Public bucket: removed photos must be deleted from storage, not just unlinked.
+    const dropped = before.filter((p) => !kept.includes(p))
+    if (dropped.length) await this.client.storage.from('visit-photos').remove(dropped)
+    return id
   }
 
   async deleteVisit(id: string) {
     const photos = check(await this.client.from('visit_photos').select('storage_path').eq('visit_id', id))
-    check(await this.client.from('visits').delete().eq('id', id))
+    const deleted = check(await this.client.from('visits').delete().eq('id', id).select('id'))
+    if (!deleted.length) throw new ApiError("This rating's review is under moderation, so it can't be deleted right now.", 'forbidden')
     if (photos.length) await this.client.storage.from('visit-photos').remove(photos.map((p: Row) => p.storage_path))
   }
 
@@ -479,7 +489,8 @@ export class SupabaseApi implements Api {
   }
 
   async profileCollections(userId: string) {
-    const rows = check(await this.client.from('collections').select('*, collection_items(*)').eq('user_id', userId).eq('visibility', 'public'))
+    // RLS already limits other people's collections to public ones; your own include private.
+    const rows = check(await this.client.from('collections').select('*, collection_items(*)').eq('user_id', userId).order('updated_at', { ascending: false }))
     return rows.map((r: Row) => mapCollection(r, null))
   }
 
