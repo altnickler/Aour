@@ -1,0 +1,10 @@
+<!-- Used for both "Magic Link" and "Confirm signup" templates. Must include {{ .Token }}:
+     the PWA asks for the 6-digit code because links open Safari, not the home-screen app. -->
+<div style="font-family:-apple-system,Segoe UI,sans-serif;background:#FFF9EC;padding:32px;color:#2A1A12">
+  <div style="max-width:420px;margin:0 auto;background:#fff;border-radius:20px;padding:28px">
+    <p style="font-size:22px;font-weight:800;color:#3B251B;margin:0 0 8px">Your Aour code</p>
+    <p style="margin:0 0 20px;color:#725C4C">Enter this code in Aour to sign in. It expires in 15 minutes.</p>
+    <p style="font-size:34px;letter-spacing:8px;font-weight:800;color:#3B251B;background:#FFDE75;border-radius:14px;padding:14px;text-align:center;margin:0 0 20px">{{ .Token }}</p>
+    <p style="margin:0;color:#725C4C;font-size:13px">Or <a href="{{ .ConfirmationURL }}" style="color:#3B251B">tap here to sign in</a> in this browser. If you didn't request this, you can ignore this email.</p>
+  </div>
+</div>

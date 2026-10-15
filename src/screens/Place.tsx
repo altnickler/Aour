@@ -64,6 +64,8 @@ function PlaceView({ place }: { place: Establishment }) {
   const conf = confidenceLabel(place.community.reviewers)
   const status = happyHourStatus(place.windows, place.exceptions, place.timezone, now)
   const shown = reviewTab === 'all' ? reviews : friendReviews
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: place.timezone }).format(now)
+  const upcomingExceptions = place.exceptions.filter((x) => x.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date))
 
   return (
     <div className="pb-6">
@@ -177,9 +179,9 @@ function PlaceView({ place }: { place: Establishment }) {
                   </li>
                 ))}
               </ul>
-              {place.exceptions.length > 0 && (
+              {upcomingExceptions.length > 0 && (
                 <ul className="mt-3 space-y-1 text-sm text-muted">
-                  {place.exceptions.map((x) => (
+                  {upcomingExceptions.map((x) => (
                     <li key={x.id}>
                       <b className="text-choc">{new Date(`${x.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}:</b>{' '}
                       {x.closed ? 'No happy hour' : `${formatRange(x.start!, x.end!)}`} {x.note && `· ${x.note}`}

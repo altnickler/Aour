@@ -9,7 +9,7 @@ import { cn } from '@/lib/cn'
  */
 export function Logo({ className, size = 28 }: { className?: string; size?: number }) {
   return (
-    <span className={cn('inline-flex items-center gap-2', className)} aria-label="Aour">
+    <span role="img" className={cn('inline-flex items-center gap-2', className)} aria-label="Aour">
       <Mark size={size} />
       <span className="font-extrabold tracking-tight text-choc" style={{ fontSize: size * 0.86 }} aria-hidden>
         aour

@@ -7,6 +7,7 @@ import { AuthProvider } from '@/app/auth'
 import { LocationProvider } from '@/app/location'
 import { ToastProvider } from '@/components/toast'
 import { registerServiceWorker } from '@/app/pwa'
+import { initMonitoring } from '@/app/monitoring'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -31,3 +32,4 @@ createRoot(document.getElementById('root')!).render(
 )
 
 registerServiceWorker()
+initMonitoring()

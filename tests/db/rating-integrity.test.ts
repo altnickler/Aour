@@ -59,6 +59,17 @@ describe('save_visit validation', () => {
     await expect(saveVisit(pool, user, { establishment_id: place, scores: { drinks: 8 }, photo_paths: paths })).rejects.toThrow(/Up to 4/)
   })
 
+  it('edits review and private note in place (upsert under column grants)', async () => {
+    const id = await saveVisit(pool, user, { establishment_id: place, scores: { drinks: 8 }, review: 'First take', note: 'secret 1' })
+    await saveVisit(pool, user, { id, establishment_id: place, scores: { drinks: 9 }, review: 'Second take', note: 'secret 2' })
+    const r = await pool.query(`select (select body from public.reviews where visit_id = $1) as review, (select body from public.visit_notes where visit_id = $1) as note`, [id])
+    expect(r.rows[0]).toEqual({ review: 'Second take', note: 'secret 2' })
+    await saveVisit(pool, user, { id, establishment_id: place, scores: { drinks: 9 }, review: '', note: '' })
+    const cleared = await pool.query(`select (select count(*)::int from public.reviews where visit_id = $1) as r, (select count(*)::int from public.visit_notes where visit_id = $1) as n`, [id])
+    expect(cleared.rows[0]).toEqual({ r: 0, n: 0 })
+    await as(pool, user, (c) => c.query(`delete from public.visits where id = $1`, [id]))
+  })
+
   it('stores N/A as null and keeps detailed metrics', async () => {
     const id = await saveVisit(pool, user, { establishment_id: place, mode: 'detailed', scores: { drinks: 8.5, food: null, cocktail_quality: 9 } })
     const { rows } = await pool.query(`select category_key, score from public.rating_scores where visit_id = $1 order by category_key`, [id])

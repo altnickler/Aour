@@ -99,7 +99,7 @@ export default function MapScreen() {
   return (
     <div className="relative h-[calc(100dvh-4.75rem-env(safe-area-inset-bottom))]">
       {failed ? (
-        <div className="pt-safe h-full overflow-y-auto">
+        <div className="pt-safe h-full overflow-y-auto pt-16">
           <EmptyState icon="🗺️" title="Map unavailable" body="We couldn't load the map right now. Here are the places as a list." />
           <ul className="px-3">
             {results.map((e) => (

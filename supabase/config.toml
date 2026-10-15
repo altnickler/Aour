@@ -1,0 +1,57 @@
+# Local development stack for `supabase start` (requires Docker). Production settings are
+# configured in the Supabase dashboard — see DEPLOYMENT.md.
+project_id = "aour"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:4173"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+otp_length = 6
+otp_expiry = 900
+
+[auth.email.template.magic_link]
+subject = "Your Aour sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Your Aour sign-in code"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.external.apple]
+enabled = false
+client_id = ""
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"

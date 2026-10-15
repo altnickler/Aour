@@ -80,7 +80,7 @@ export default function UserProfileScreen() {
         <div className="flex items-center gap-4">
           <Avatar name={p.displayName} url={p.avatarUrl} size={72} className="ring-4 ring-white shadow-card" />
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-2xl font-extrabold text-choc">{p.displayName}</h1>
+            <h2 className="truncate text-2xl font-extrabold text-choc">{p.displayName}</h2>
             {p.homeCity && (
               <p className="flex items-center gap-1 text-sm text-muted">
                 <MapPin className="size-3.5" /> {p.homeCity}

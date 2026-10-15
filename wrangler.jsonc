@@ -1,0 +1,12 @@
+// Cloudflare Workers — static assets only (no Worker code runs, so requests are free and unlimited).
+// Deploy: `npm run deploy` (or the GitHub Actions workflow). Docs: DEPLOYMENT.md
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aour",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Client-side routing: unknown paths serve index.html.
+    "not_found_handling": "single-page-application"
+  }
+}
