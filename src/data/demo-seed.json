@@ -1,0 +1,1839 @@
+{
+ "establishments": [
+  {
+   "id": "e0de0000-0000-0000-0000-000000000001",
+   "slug": "driftwood-social",
+   "name": "Driftwood Social",
+   "kind": "cocktail_lounge",
+   "neighborhood": "Downtown Stuart",
+   "city": "Stuart",
+   "state": "FL",
+   "address": "Demo listing · Downtown Stuart",
+   "lat": 27.1979,
+   "lng": -80.2537,
+   "priceLevel": 2,
+   "amenities": [
+    "full_bar",
+    "outdoor_seating"
+   ],
+   "description": "Breezy, plant-filled lounge with a short, sharp cocktail list. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 12,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000001",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "16:00",
+     "end": "19:00"
+    },
+    {
+     "id": "a0de0000-0000-0000-0000-000000000002",
+     "label": null,
+     "notes": null,
+     "days": [
+      6
+     ],
+     "start": "15:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000001",
+     "kind": "drink",
+     "title": "Classic cocktails",
+     "price": "$7",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000002",
+     "kind": "drink",
+     "title": "House wine",
+     "price": "$5",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000003",
+     "kind": "food",
+     "title": "Half-price flatbreads",
+     "price": null,
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000002",
+   "slug": "the-pelican-pour",
+   "name": "The Pelican Pour",
+   "kind": "bar",
+   "neighborhood": "Jensen Beach",
+   "city": "Jensen Beach",
+   "state": "FL",
+   "address": "Demo listing · Jensen Beach",
+   "lat": 27.2551,
+   "lng": -80.2291,
+   "priceLevel": 1,
+   "amenities": [
+    "waterfront",
+    "outdoor_seating",
+    "dog_friendly",
+    "beer_wine_only"
+   ],
+   "description": "Dockside deck, cold beer and sunsets over the river. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 30,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000011",
+     "label": null,
+     "notes": null,
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "start": "15:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000011",
+     "kind": "drink",
+     "title": "Local drafts",
+     "price": "$4",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000012",
+     "kind": "drink",
+     "title": "Wine by the glass",
+     "price": "$5",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000013",
+     "kind": "food",
+     "title": "Peel-and-eat shrimp",
+     "price": "$9",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000003",
+   "slug": "copper-heron-cocktail-club",
+   "name": "Copper Heron Cocktail Club",
+   "kind": "cocktail_lounge",
+   "neighborhood": "Downtown Stuart",
+   "city": "Stuart",
+   "state": "FL",
+   "address": "Demo listing · Downtown Stuart",
+   "lat": 27.1968,
+   "lng": -80.2521,
+   "priceLevel": 3,
+   "amenities": [
+    "full_bar"
+   ],
+   "description": "Moody speakeasy-style bar with serious craft cocktails. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 5,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000021",
+     "label": null,
+     "notes": null,
+     "days": [
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "start": "17:00",
+     "end": "19:00"
+    },
+    {
+     "id": "a0de0000-0000-0000-0000-000000000022",
+     "label": "Late night",
+     "notes": null,
+     "days": [
+      5,
+      6
+     ],
+     "start": "22:00",
+     "end": "00:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000021",
+     "kind": "drink",
+     "title": "Bartender's choice",
+     "price": "$9",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000022",
+     "kind": "drink",
+     "title": "Old fashioned",
+     "price": "$8",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000023",
+     "kind": "food",
+     "title": "Truffle fries",
+     "price": "$6",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000004",
+   "slug": "banyan-and-brine",
+   "name": "Banyan & Brine",
+   "kind": "raw_bar",
+   "neighborhood": "Port Salerno",
+   "city": "Port Salerno",
+   "state": "FL",
+   "address": "Demo listing · Port Salerno",
+   "lat": 27.1447,
+   "lng": -80.1899,
+   "priceLevel": 2,
+   "amenities": [
+    "waterfront",
+    "outdoor_seating",
+    "boat_docking",
+    "full_bar"
+   ],
+   "description": "Fish-house raw bar on the water with boat slips out back. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 41,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000031",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "15:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000031",
+     "kind": "food",
+     "title": "Oysters on the half shell",
+     "price": "$1.50 ea",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000032",
+     "kind": "drink",
+     "title": "Margaritas",
+     "price": "$5",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000033",
+     "kind": "food",
+     "title": "Fish dip",
+     "price": "$7",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000005",
+   "slug": "tidewater-tap-house",
+   "name": "Tidewater Tap House",
+   "kind": "brewery",
+   "neighborhood": "Stuart",
+   "city": "Stuart",
+   "state": "FL",
+   "address": "Demo listing · Stuart",
+   "lat": 27.1903,
+   "lng": -80.2439,
+   "priceLevel": 1,
+   "amenities": [
+    "beer_wine_only",
+    "tvs",
+    "parking_lot",
+    "dog_friendly"
+   ],
+   "description": "Neighborhood taproom pouring rotating local brews. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 120,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000041",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "15:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000041",
+     "kind": "drink",
+     "title": "$2 off all pints",
+     "price": null,
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000042",
+     "kind": "food",
+     "title": "Pretzel & beer cheese",
+     "price": "$6",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000006",
+   "slug": "little-lagoon-wine-bar",
+   "name": "Little Lagoon Wine Bar",
+   "kind": "wine_bar",
+   "neighborhood": "Jensen Beach",
+   "city": "Jensen Beach",
+   "state": "FL",
+   "address": "Demo listing · Jensen Beach",
+   "lat": 27.2532,
+   "lng": -80.2312,
+   "priceLevel": 2,
+   "amenities": [
+    "outdoor_seating"
+   ],
+   "description": "Cozy wine bar with a patio and small plates. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 18,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000051",
+     "label": null,
+     "notes": null,
+     "days": [
+      3,
+      4,
+      5,
+      6,
+      0
+     ],
+     "start": "16:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000051",
+     "kind": "drink",
+     "title": "Featured wines by the glass",
+     "price": "$6",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000052",
+     "kind": "food",
+     "title": "Cheese board",
+     "price": "$12",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000007",
+   "slug": "golden-hour-rooftop",
+   "name": "Golden Hour Rooftop",
+   "kind": "bar",
+   "neighborhood": "Downtown Stuart",
+   "city": "Stuart",
+   "state": "FL",
+   "address": "Demo listing · Downtown Stuart",
+   "lat": 27.1985,
+   "lng": -80.2549,
+   "priceLevel": 3,
+   "amenities": [
+    "rooftop",
+    "full_bar",
+    "live_music"
+   ],
+   "description": "Rooftop bar with skyline-and-river views. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 3,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000061",
+     "label": null,
+     "notes": null,
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "start": "16:00",
+     "end": "19:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000061",
+     "kind": "drink",
+     "title": "Frozé",
+     "price": "$8",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000062",
+     "kind": "drink",
+     "title": "Rail drinks",
+     "price": "$6",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000063",
+     "kind": "food",
+     "title": "Ceviche",
+     "price": "$10",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000008",
+   "slug": "mangrove-mill-kitchen",
+   "name": "Mangrove Mill Kitchen",
+   "kind": "restaurant",
+   "neighborhood": "Palm City",
+   "city": "Palm City",
+   "state": "FL",
+   "address": "Demo listing · Palm City",
+   "lat": 27.1689,
+   "lng": -80.2655,
+   "priceLevel": 2,
+   "amenities": [
+    "full_bar",
+    "parking_lot",
+    "wheelchair_accessible"
+   ],
+   "description": "Family-friendly kitchen and bar with a big patio. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 60,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000071",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "16:00",
+     "end": "18:30"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000071",
+     "kind": "food",
+     "title": "Smash sliders",
+     "price": "$8",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000072",
+     "kind": "drink",
+     "title": "Draft beers",
+     "price": "$4",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000073",
+     "kind": "drink",
+     "title": "House margarita",
+     "price": "$6",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000009",
+   "slug": "sandbar-social-club",
+   "name": "Sandbar Social Club",
+   "kind": "tiki_bar",
+   "neighborhood": "Hutchinson Island",
+   "city": "Stuart",
+   "state": "FL",
+   "address": "Demo listing · Hutchinson Island",
+   "lat": 27.2211,
+   "lng": -80.1638,
+   "priceLevel": 2,
+   "amenities": [
+    "waterfront",
+    "outdoor_seating",
+    "live_music"
+   ],
+   "description": "Sand-floor tiki bar steps from the beach. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 75,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000081",
+     "label": null,
+     "notes": null,
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ],
+     "start": "14:00",
+     "end": "17:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000081",
+     "kind": "drink",
+     "title": "Rum punch",
+     "price": "$6",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000082",
+     "kind": "drink",
+     "title": "Buckets of beer",
+     "price": "$15",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000083",
+     "kind": "food",
+     "title": "Conch fritters",
+     "price": "$8",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000010",
+   "slug": "saltline-sports-grill",
+   "name": "Saltline Sports Grill",
+   "kind": "sports_bar",
+   "neighborhood": "Palm City",
+   "city": "Palm City",
+   "state": "FL",
+   "address": "Demo listing · Palm City",
+   "lat": 27.1655,
+   "lng": -80.2701,
+   "priceLevel": 1,
+   "amenities": [
+    "tvs",
+    "full_bar",
+    "parking_lot"
+   ],
+   "description": "Game-day grill with wings and cheap drafts. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 200,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000091",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "15:00",
+     "end": "19:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000091",
+     "kind": "food",
+     "title": "Wings",
+     "price": "$0.75 ea",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000092",
+     "kind": "drink",
+     "title": "Domestic drafts",
+     "price": "$3",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000011",
+   "slug": "the-gilded-gator",
+   "name": "The Gilded Gator",
+   "kind": "restaurant",
+   "neighborhood": "Hobe Sound",
+   "city": "Hobe Sound",
+   "state": "FL",
+   "address": "Demo listing · Hobe Sound",
+   "lat": 27.0601,
+   "lng": -80.1371,
+   "priceLevel": 3,
+   "amenities": [
+    "full_bar",
+    "outdoor_seating"
+   ],
+   "description": "Polished Florida-modern bistro with a lively bar. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 25,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000101",
+     "label": null,
+     "notes": null,
+     "days": [
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "16:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000101",
+     "kind": "drink",
+     "title": "Martinis",
+     "price": "$9",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000102",
+     "kind": "food",
+     "title": "Half-price appetizers",
+     "price": null,
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000012",
+   "slug": "seagrape-supper-club",
+   "name": "Seagrape Supper Club",
+   "kind": "restaurant",
+   "neighborhood": "Sewall's Point",
+   "city": "Sewall's Point",
+   "state": "FL",
+   "address": "Demo listing · Sewall's Point",
+   "lat": 27.1812,
+   "lng": -80.2003,
+   "priceLevel": 3,
+   "amenities": [
+    "full_bar"
+   ],
+   "description": "Retro supper club. Happy-hour details submitted by a user and awaiting verification. (Fictional demo listing.)",
+   "hhStatus": "unverified",
+   "verifiedDaysAgo": null,
+   "hhSourceNote": "Submitted by a user",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000111",
+     "label": null,
+     "notes": null,
+     "days": [
+      4,
+      5
+     ],
+     "start": "17:00",
+     "end": "18:30"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000111",
+     "kind": "drink",
+     "title": "Wine pours",
+     "price": "$7",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000013",
+   "slug": "hobe-harbor-taproom",
+   "name": "Hobe Harbor Taproom",
+   "kind": "bar",
+   "neighborhood": "Hobe Sound",
+   "city": "Hobe Sound",
+   "state": "FL",
+   "address": "Demo listing · Hobe Sound",
+   "lat": 27.0577,
+   "lng": -80.1344,
+   "priceLevel": 1,
+   "amenities": [
+    "beer_wine_only",
+    "dog_friendly"
+   ],
+   "description": "Laid-back taproom. Users reported the happy hour may have changed. (Fictional demo listing.)",
+   "hhStatus": "outdated",
+   "verifiedDaysAgo": 400,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 200,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000121",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "16:00",
+     "end": "18:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000121",
+     "kind": "drink",
+     "title": "Pints",
+     "price": "$4",
+     "description": null
+    }
+   ]
+  },
+  {
+   "id": "e0de0000-0000-0000-0000-000000000014",
+   "slug": "lighthouse-lane-cantina",
+   "name": "Lighthouse Lane Cantina",
+   "kind": "restaurant",
+   "neighborhood": "Jensen Beach",
+   "city": "Jensen Beach",
+   "state": "FL",
+   "address": "Demo listing · Jensen Beach",
+   "lat": 27.2499,
+   "lng": -80.2276,
+   "priceLevel": 1,
+   "amenities": [
+    "outdoor_seating",
+    "full_bar"
+   ],
+   "description": "Colorful cantina with a strong taco game. (Fictional demo listing.)",
+   "hhStatus": "verified",
+   "verifiedDaysAgo": 9,
+   "hhSourceNote": "Demo data — not a real source",
+   "createdDaysAgo": 14,
+   "windows": [
+    {
+     "id": "a0de0000-0000-0000-0000-000000000131",
+     "label": null,
+     "notes": null,
+     "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ],
+     "start": "15:00",
+     "end": "18:00"
+    },
+    {
+     "id": "a0de0000-0000-0000-0000-000000000132",
+     "label": "Taco Tuesday",
+     "notes": null,
+     "days": [
+      2
+     ],
+     "start": "11:00",
+     "end": "22:00"
+    }
+   ],
+   "specials": [
+    {
+     "id": "b0de0000-0000-0000-0000-000000000131",
+     "kind": "food",
+     "title": "Street tacos",
+     "price": "$2.50",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000132",
+     "kind": "drink",
+     "title": "Margaritas",
+     "price": "$5",
+     "description": null
+    },
+    {
+     "id": "b0de0000-0000-0000-0000-000000000133",
+     "kind": "drink",
+     "title": "Mexican lager",
+     "price": "$3.50",
+     "description": null
+    }
+   ]
+  }
+ ],
+ "users": [
+  {
+   "id": "c0de0000-0000-0000-0000-000000000001",
+   "email": "allie_k@demo.aour.app",
+   "username": "allie_k",
+   "displayName": "Allie K.",
+   "bio": "Professional happy-hour enthusiast. Espresso martinis > everything.",
+   "homeCity": "Stuart"
+  },
+  {
+   "id": "c0de0000-0000-0000-0000-000000000002",
+   "email": "marco_r@demo.aour.app",
+   "username": "marco_r",
+   "displayName": "Marco R.",
+   "bio": "Oysters and IPAs.",
+   "homeCity": "Port Salerno"
+  },
+  {
+   "id": "c0de0000-0000-0000-0000-000000000003",
+   "email": "jen_beachlife@demo.aour.app",
+   "username": "jen_beachlife",
+   "displayName": "Jen",
+   "bio": "Sunsets, rosé, repeat.",
+   "homeCity": "Jensen Beach"
+  },
+  {
+   "id": "c0de0000-0000-0000-0000-000000000004",
+   "email": "tcoast_tom@demo.aour.app",
+   "username": "tcoast_tom",
+   "displayName": "Tom B.",
+   "bio": "Cheap wings, cold beer.",
+   "homeCity": "Palm City"
+  },
+  {
+   "id": "c0de0000-0000-0000-0000-000000000005",
+   "email": "sunset_sam@demo.aour.app",
+   "username": "sunset_sam",
+   "displayName": "Sam",
+   "bio": null,
+   "homeCity": "Hobe Sound"
+  },
+  {
+   "id": "c0de0000-0000-0000-0000-000000000006",
+   "email": "rosie_wine@demo.aour.app",
+   "username": "rosie_wine",
+   "displayName": "Rosie",
+   "bio": "Wine first, questions later.",
+   "homeCity": "Stuart"
+  }
+ ],
+ "visits": [
+  {
+   "id": "d0de0000-0000-0000-0000-000000000001",
+   "userId": "c0de0000-0000-0000-0000-000000000001",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000007",
+   "daysAgo": 94,
+   "mode": "quick",
+   "scores": {
+    "ambience": 10,
+    "drinks": 7.5,
+    "food": 6.5,
+    "value": 6,
+    "service": 6,
+    "overall": 7.5
+   },
+   "tags": [
+    "casual"
+   ],
+   "review": "Bartender remembered our order the second time. Great vibe at sunset."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000002",
+   "userId": "c0de0000-0000-0000-0000-000000000001",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000009",
+   "daysAgo": 34,
+   "mode": "quick",
+   "scores": {
+    "ambience": 10,
+    "drinks": 7.5,
+    "food": 6.5,
+    "value": 8,
+    "service": 7,
+    "overall": 9
+   },
+   "tags": [
+    "outdoor-seating",
+    "waterfront"
+   ],
+   "review": "Bartender remembered our order the second time. Great vibe at sunset."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000003",
+   "userId": "c0de0000-0000-0000-0000-000000000001",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000012",
+   "daysAgo": 20,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 7,
+    "food": 7.5,
+    "value": 8.5,
+    "service": 6.5,
+    "overall": 8
+   },
+   "tags": [
+    "date-night",
+    "local-favorite",
+    "good-for-groups"
+   ],
+   "review": "Bartender remembered our order the second time. Great vibe at sunset."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000004",
+   "userId": "c0de0000-0000-0000-0000-000000000001",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000013",
+   "daysAgo": 19,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 7,
+    "drinks": 7.5,
+    "food": null,
+    "value": 8,
+    "service": 6,
+    "overall": 8
+   },
+   "tags": [
+    "casual",
+    "cheap-drinks"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000005",
+   "userId": "c0de0000-0000-0000-0000-000000000001",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000013",
+   "daysAgo": 106,
+   "mode": "quick",
+   "scores": {
+    "ambience": 6.5,
+    "drinks": 7,
+    "food": null,
+    "value": 7.5,
+    "service": 5.5,
+    "overall": 7.5
+   },
+   "tags": [
+    "casual"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000006",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000003",
+   "daysAgo": 99,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 9,
+    "food": 6.5,
+    "value": 6.5,
+    "service": 6.5,
+    "overall": 7.5
+   },
+   "tags": [
+    "upscale"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000007",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000003",
+   "daysAgo": 91,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9,
+    "drinks": 10,
+    "food": null,
+    "value": 7.5,
+    "service": 8,
+    "overall": 9.5
+   },
+   "tags": [
+    "girls-night"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000008",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000002",
+   "daysAgo": 82,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 7.5,
+    "food": 7.5,
+    "value": 9,
+    "service": 7,
+    "overall": 8
+   },
+   "tags": [
+    "good-for-groups"
+   ],
+   "review": "Bartender remembered our order the second time. Great vibe at sunset."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000009",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000010",
+   "daysAgo": 10,
+   "mode": "quick",
+   "scores": {
+    "ambience": 5.5,
+    "drinks": 8,
+    "food": null,
+    "value": 9,
+    "service": 6.5,
+    "overall": 8
+   },
+   "tags": [
+    "lively"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000010",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000007",
+   "daysAgo": 89,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8,
+    "drinks": 7,
+    "food": 7.5,
+    "value": 7,
+    "service": 6.5,
+    "overall": 7
+   },
+   "tags": [
+    "lively",
+    "good-for-groups"
+   ],
+   "review": "Bartender remembered our order the second time. Great vibe at sunset."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000011",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000006",
+   "daysAgo": 56,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 6.5,
+    "food": 7,
+    "value": 6.5,
+    "service": 8,
+    "overall": 7.5
+   },
+   "tags": [
+    "date-night"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000012",
+   "userId": "c0de0000-0000-0000-0000-000000000002",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000005",
+   "daysAgo": 9,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7,
+    "drinks": 8,
+    "food": null,
+    "value": 9,
+    "service": 7.5,
+    "overall": 8.5
+   },
+   "tags": [
+    "casual",
+    "relaxed"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000013",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000005",
+   "daysAgo": 79,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 8,
+    "food": 6.5,
+    "value": 10,
+    "service": 8,
+    "overall": 9
+   },
+   "tags": [
+    "casual",
+    "relaxed"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000014",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000004",
+   "daysAgo": 76,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8,
+    "drinks": 8,
+    "food": 9.5,
+    "value": 9.5,
+    "service": 7.5,
+    "overall": 8.5
+   },
+   "tags": [
+    "waterfront",
+    "local-favorite"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000015",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000014",
+   "daysAgo": 113,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 8,
+    "food": 8,
+    "value": 10,
+    "service": 7.5,
+    "overall": 8.5
+   },
+   "tags": [
+    "great-food",
+    "local-favorite",
+    "good-for-groups"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000016",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000003",
+   "daysAgo": 48,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 10,
+    "food": 8,
+    "value": 6.5,
+    "service": 7.5,
+    "overall": 9
+   },
+   "tags": [
+    "best-cocktails",
+    "upscale"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000017",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000009",
+   "daysAgo": 15,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 10,
+    "drinks": 8,
+    "food": 6.5,
+    "value": 8.5,
+    "service": 7.5,
+    "overall": 8.5
+   },
+   "tags": [
+    "lively"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000018",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000002",
+   "daysAgo": 38,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 9,
+    "drinks": 6.5,
+    "food": 7,
+    "value": 9.5,
+    "service": 8,
+    "overall": 8.5
+   },
+   "tags": [
+    "casual",
+    "good-for-groups"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000019",
+   "userId": "c0de0000-0000-0000-0000-000000000003",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000012",
+   "daysAgo": 84,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8,
+    "drinks": 7.5,
+    "food": 7.5,
+    "value": 8.5,
+    "service": 7,
+    "overall": 8
+   },
+   "tags": [
+    "great-food",
+    "date-night",
+    "local-favorite"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000020",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000001",
+   "daysAgo": 53,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 9,
+    "food": 7.5,
+    "value": 8,
+    "service": 7,
+    "overall": 8.5
+   },
+   "tags": [
+    "date-night",
+    "upscale",
+    "girls-night"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000021",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000014",
+   "daysAgo": 86,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8,
+    "drinks": 7,
+    "food": 7.5,
+    "value": 9,
+    "service": 7,
+    "overall": 8
+   },
+   "tags": [
+    "date-night",
+    "good-for-groups"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000022",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000002",
+   "daysAgo": 18,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 7,
+    "food": 8,
+    "value": 9,
+    "service": 7,
+    "overall": 8
+   },
+   "tags": [
+    "lively",
+    "casual"
+   ],
+   "review": "Perfect spot for a low-key weeknight."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000023",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000003",
+   "daysAgo": 29,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9,
+    "drinks": 8,
+    "food": null,
+    "value": 6,
+    "service": 6.5,
+    "overall": 8
+   },
+   "tags": [
+    "upscale"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000024",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000003",
+   "daysAgo": 16,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 10,
+    "drinks": 10,
+    "food": 8,
+    "value": 7.5,
+    "service": 7.5,
+    "overall": 9.5
+   },
+   "tags": [
+    "girls-night"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000025",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000011",
+   "daysAgo": 32,
+   "mode": "quick",
+   "scores": {
+    "ambience": 6.5,
+    "drinks": 6,
+    "food": null,
+    "value": 7,
+    "service": 8.5,
+    "overall": 7
+   },
+   "tags": [
+    "date-night"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000026",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000007",
+   "daysAgo": 38,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9.5,
+    "drinks": 6,
+    "food": 6.5,
+    "value": 6,
+    "service": 7.5,
+    "overall": 7.5
+   },
+   "tags": [],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000027",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000010",
+   "daysAgo": 30,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7.5,
+    "drinks": 7.5,
+    "food": 8.5,
+    "value": 8.5,
+    "service": 7.5,
+    "overall": 8
+   },
+   "tags": [
+    "good-for-groups"
+   ],
+   "review": "Perfect spot for a low-key weeknight."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000028",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000009",
+   "daysAgo": 20,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9,
+    "drinks": 6.5,
+    "food": null,
+    "value": 7.5,
+    "service": 8,
+    "overall": 7.5
+   },
+   "tags": [
+    "waterfront",
+    "outdoor-seating"
+   ],
+   "review": "Bartender remembered our order the second time. Great vibe at sunset."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000029",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000004",
+   "daysAgo": 53,
+   "mode": "quick",
+   "scores": {
+    "ambience": 6.5,
+    "drinks": 6.5,
+    "food": 8.5,
+    "value": 8,
+    "service": 6,
+    "overall": 7.5
+   },
+   "tags": [
+    "waterfront",
+    "casual"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000030",
+   "userId": "c0de0000-0000-0000-0000-000000000004",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000004",
+   "daysAgo": 84,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 8.5,
+    "drinks": 7,
+    "food": 9.5,
+    "value": 7.5,
+    "service": 7.5,
+    "overall": 7.5
+   },
+   "tags": [
+    "waterfront"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000031",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000005",
+   "daysAgo": 88,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7.5,
+    "drinks": 6.5,
+    "food": 7,
+    "value": 8,
+    "service": 8.5,
+    "overall": 8
+   },
+   "tags": [
+    "casual",
+    "good-for-groups",
+    "cheap-drinks"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000032",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000008",
+   "daysAgo": 67,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7,
+    "drinks": 6.5,
+    "food": 8,
+    "value": 8,
+    "service": 9,
+    "overall": 7
+   },
+   "tags": [
+    "great-food"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000033",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000006",
+   "daysAgo": 45,
+   "mode": "quick",
+   "scores": {
+    "ambience": 10,
+    "drinks": 7,
+    "food": 7.5,
+    "value": 8.5,
+    "service": 9,
+    "overall": 9
+   },
+   "tags": [
+    "date-night",
+    "quiet"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000034",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000006",
+   "daysAgo": 43,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9.5,
+    "drinks": 7,
+    "food": null,
+    "value": 7,
+    "service": 9,
+    "overall": 8
+   },
+   "tags": [
+    "great-wine",
+    "quiet"
+   ],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000035",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000001",
+   "daysAgo": 45,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8,
+    "drinks": 8,
+    "food": 7,
+    "value": 8,
+    "service": 8.5,
+    "overall": 8
+   },
+   "tags": [
+    "date-night",
+    "upscale"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000036",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000010",
+   "daysAgo": 82,
+   "mode": "quick",
+   "scores": {
+    "ambience": 6.5,
+    "drinks": 7,
+    "food": 7,
+    "value": 8.5,
+    "service": 6.5,
+    "overall": 7
+   },
+   "tags": [
+    "cheap-drinks",
+    "lively",
+    "casual"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000037",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000010",
+   "daysAgo": 120,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7.5,
+    "drinks": 8.5,
+    "food": 8,
+    "value": 10,
+    "service": 9,
+    "overall": 8.5
+   },
+   "tags": [
+    "lively"
+   ],
+   "review": "Specials were legit — we stayed way past happy hour."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000038",
+   "userId": "c0de0000-0000-0000-0000-000000000005",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000009",
+   "daysAgo": 75,
+   "mode": "quick",
+   "scores": {
+    "ambience": 10,
+    "drinks": 7.5,
+    "food": 7.5,
+    "value": 7.5,
+    "service": 9,
+    "overall": 8.5
+   },
+   "tags": [
+    "lively",
+    "waterfront"
+   ],
+   "review": null
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000039",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000014",
+   "daysAgo": 58,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7,
+    "drinks": 8,
+    "food": 9,
+    "value": 10,
+    "service": 8.5,
+    "overall": 8
+   },
+   "tags": [
+    "date-night"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000040",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000014",
+   "daysAgo": 33,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8,
+    "drinks": 8,
+    "food": 9,
+    "value": 9.5,
+    "service": 7,
+    "overall": 8
+   },
+   "tags": [
+    "great-food"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000041",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000002",
+   "daysAgo": 8,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9,
+    "drinks": 8,
+    "food": null,
+    "value": 10,
+    "service": 9,
+    "overall": 9
+   },
+   "tags": [
+    "lively",
+    "casual",
+    "waterfront"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000042",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000006",
+   "daysAgo": 120,
+   "mode": "quick",
+   "scores": {
+    "ambience": 9.5,
+    "drinks": 8,
+    "food": 7.5,
+    "value": 8.5,
+    "service": 8.5,
+    "overall": 8.5
+   },
+   "tags": [],
+   "review": "Drinks were good, food was just okay."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000043",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000006",
+   "daysAgo": 102,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 9.5,
+    "drinks": 7.5,
+    "food": 7,
+    "value": 7.5,
+    "service": 9,
+    "overall": 9
+   },
+   "tags": [
+    "quiet",
+    "relaxed"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000044",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000010",
+   "daysAgo": 93,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 7,
+    "drinks": 7,
+    "food": 7,
+    "value": 9.5,
+    "service": 8,
+    "overall": 7.5
+   },
+   "tags": [
+    "cheap-drinks",
+    "good-for-groups"
+   ],
+   "review": "Perfect spot for a low-key weeknight."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000045",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000010",
+   "daysAgo": 72,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 7.5,
+    "drinks": 8,
+    "food": 8,
+    "value": 10,
+    "service": 7.5,
+    "overall": 9
+   },
+   "tags": [
+    "cheap-drinks",
+    "casual"
+   ],
+   "review": "Perfect spot for a low-key weeknight."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000046",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000005",
+   "daysAgo": 75,
+   "mode": "quick",
+   "scores": {
+    "ambience": 8,
+    "drinks": 8,
+    "food": 7.5,
+    "value": 9,
+    "service": 8.5,
+    "overall": 8
+   },
+   "tags": [
+    "casual",
+    "relaxed"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000047",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000003",
+   "daysAgo": 59,
+   "mode": "detailed",
+   "scores": {
+    "ambience": 9.5,
+    "drinks": 10,
+    "food": null,
+    "value": 8,
+    "service": 9,
+    "overall": 9.5
+   },
+   "tags": [
+    "date-night",
+    "girls-night"
+   ],
+   "review": "Solid value. Gets crowded after 5:30 so come early."
+  },
+  {
+   "id": "d0de0000-0000-0000-0000-000000000048",
+   "userId": "c0de0000-0000-0000-0000-000000000006",
+   "establishmentId": "e0de0000-0000-0000-0000-000000000011",
+   "daysAgo": 85,
+   "mode": "quick",
+   "scores": {
+    "ambience": 7.5,
+    "drinks": 7,
+    "food": 8.5,
+    "value": 7.5,
+    "service": 8,
+    "overall": 7.5
+   },
+   "tags": [
+    "great-food",
+    "date-night",
+    "local-favorite"
+   ],
+   "review": "Loved the patio. Service was a little slow but friendly."
+  }
+ ]
+}

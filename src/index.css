@@ -1,0 +1,166 @@
+@import '@fontsource-variable/plus-jakarta-sans';
+@import 'tailwindcss';
+
+/*
+ * Aour design tokens. Brand: chocolate, butter, gold on warm cream.
+ * Text colours are tuned for WCAG AA on cream (#FFF9EC):
+ *   espresso 15.6:1 · chocolate 13.4:1 · muted 5.6:1
+ */
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-choc: #3b251b;
+  --color-choc-soft: #5a3d2f;
+  --color-espresso: #2a1a12;
+  --color-butter: #ffde75;
+  --color-butter-soft: #fff0bf;
+  --color-gold: #f4b942;
+  --color-gold-deep: #b8811a;
+  --color-cream: #fff9ec;
+  --color-cream-deep: #fbf1dc;
+  --color-beige: #ede2d0;
+  --color-muted: #725c4c;
+  --color-muted-soft: #8b7466;
+  --color-line: rgb(59 37 27 / 0.09);
+  --color-success: #2f7a4f;
+  --color-danger: #b23a2b;
+  --color-sky: #e7f0f4;
+
+  --radius-card: 1.375rem;
+  --radius-tile: 1rem;
+
+  --shadow-card: 0 1px 2px rgb(59 37 27 / 0.05), 0 10px 28px -16px rgb(59 37 27 / 0.28);
+  --shadow-float: 0 2px 6px rgb(59 37 27 / 0.08), 0 18px 40px -18px rgb(59 37 27 / 0.45);
+  --shadow-press: 0 1px 2px rgb(59 37 27 / 0.08);
+
+  --animate-rise: rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade: fade 220ms ease-out both;
+  --animate-sheet: sheet 320ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  --animate-pop: pop 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes sheet {
+    from { transform: translateY(100%); }
+    to { transform: none; }
+  }
+  @keyframes pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    background: var(--color-cream);
+  }
+  body {
+    @apply bg-cream text-espresso font-sans antialiased;
+    font-feature-settings: 'ss01', 'cv11';
+    overscroll-behavior-y: none;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-gold);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+  button, [role='button'], a {
+    touch-action: manipulation;
+  }
+  input, textarea, select {
+    /* ≥16px prevents iOS Safari zooming into fields. */
+    font-size: 16px;
+  }
+  ::selection {
+    background: var(--color-butter);
+  }
+}
+
+@layer utilities {
+  .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pb-tabbar { padding-bottom: calc(env(safe-area-inset-bottom) + 6.5rem); }
+  .bottom-tabbar { bottom: calc(env(safe-area-inset-bottom) + 5.75rem); }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-beige) 0%, var(--color-cream-deep) 50%, var(--color-beige) 100%);
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+  .press { transition: transform 120ms ease, box-shadow 120ms ease, background-color 150ms ease; }
+  .press:active { transform: scale(0.97); }
+  .snap-x-row { scroll-snap-type: x mandatory; scroll-padding-inline: 1.25rem; }
+  .snap-x-row > * { scroll-snap-align: start; }
+}
+
+/* Rating slider: large, thumb-friendly range input. */
+.score-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+}
+.score-range::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-gold) 0%, var(--color-gold) var(--fill, 0%), var(--color-beige) var(--fill, 0%));
+}
+.score-range::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-gold) 0%, var(--color-gold) var(--fill, 0%), var(--color-beige) var(--fill, 0%));
+}
+.score-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -10px;
+  border-radius: 999px;
+  background: var(--color-choc);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgb(59 37 27 / 0.35);
+}
+.score-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--color-choc);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgb(59 37 27 / 0.35);
+}
+.score-range:disabled::-webkit-slider-thumb { background: var(--color-muted-soft); }
+/* Not yet scored: a soft, inviting thumb instead of a committed value. */
+.score-range[data-untouched]::-webkit-slider-thumb { background: var(--color-beige); border-color: #fff; box-shadow: 0 1px 4px rgb(59 37 27 / 0.25); }
+.score-range[data-untouched]::-moz-range-thumb { background: var(--color-beige); }
+.score-range:disabled { opacity: 0.45; }
+
+.maplibregl-ctrl-attrib { font-size: 10px; }
+.maplibregl-canvas:focus-visible { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

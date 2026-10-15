@@ -346,3 +346,11 @@ describe('account deletion', () => {
     await rejects(as(pool, null, (c) => c.query(`select public.delete_my_account()`)))
   })
 })
+
+describe('following list', () => {
+  it('returns only the caller\'s followees', async () => {
+    const list = await as(pool, bob, (c) => c.query(`select public.my_following() as f`).then((r) => r.rows[0].f))
+    expect(list.map((u: { username: string }) => u.username)).toEqual(['alice'])
+    await rejects(as(pool, null, (c) => c.query(`select public.my_following()`)))
+  })
+})
