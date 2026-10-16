@@ -36,6 +36,9 @@ jobs:
       - name: Run pipeline
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' }}
         run: npm run pipeline -- "${{ github.event.inputs.mode || 'discover' }}"
+      - name: Reclassify imported listings (archives untouched non-venues; reversible)
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' && (github.event.inputs.mode || 'discover') == 'discover' }}
+        run: npx tsx scripts/maintenance.ts reclassify --apply
       - name: Not configured
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
         run: echo "::warning::SUPABASE_SERVICE_ROLE_KEY is not set for the production environment; discovery skipped (see DEPLOYMENT.md)."
