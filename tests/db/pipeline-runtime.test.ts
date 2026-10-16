@@ -155,12 +155,35 @@ describe('enrichment from a venue website', () => {
     }
   })
 
-  it('treats a robots.txt server error as "crawl nothing"', async () => {
+  it('treats a robots.txt server error as "crawl nothing for now" and retries soon', async () => {
     const v = await venue()
     const web = fakeWeb({ [`${v.base}/robots.txt`]: () => new Response('oops', { status: 500 }), [`${v.base}/`]: HOME })
     const r = await enrichEstablishment(v.id, deps(web))
-    expect(r.outcome).toBe('blocked')
+    expect(r.outcome).toBe('error')
     expect(web.calls).toHaveLength(1)
+    expect(daysFromNow((await row(v.id)).next_enrich_at)).toBeLessThan(1)
+    // Not cached: the next attempt asks for robots.txt again and crawls once it answers.
+    web.routes[`${v.base}/robots.txt`] = () => new Response('User-agent: *\nAllow: /\n', { headers: { 'content-type': 'text/plain' } })
+    const c = clock()
+    await c.sleep(60_000)
+    const again = await enrichEstablishment(v.id, deps(web, c))
+    expect(again.outcome).not.toBe('error')
+    expect(web.calls.map((x) => x.url).slice(1, 3)).toEqual([`${v.base}/robots.txt`, `${v.base}/`])
+  })
+
+  it('treats an unreachable robots.txt as a temporary error with the network cause', async () => {
+    const v = await venue()
+    const web = fakeWeb({
+      [`${v.base}/robots.txt`]: () => {
+        throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' } })
+      },
+      [`${v.base}/`]: HOME,
+    })
+    const r = await enrichEstablishment(v.id, deps(web))
+    expect(r).toMatchObject({ outcome: 'error', reason: expect.stringContaining('UNABLE_TO_VERIFY_LEAF_SIGNATURE') })
+    expect(web.calls).toHaveLength(1)
+    const domain = (await pool.query(`select robots_fetched_at from public.source_domains where domain = $1`, [new URL(v.base).hostname])).rows[0]
+    expect(domain?.robots_fetched_at ?? null).toBeNull()
   })
 
   it('backs off on 429 using Retry-After, without counting a failure or retrying early', async () => {

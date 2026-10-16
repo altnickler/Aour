@@ -71,6 +71,14 @@ export function parseRetryAfter(value: string | null, now: Date): Date | null {
   return Number.isFinite(at) ? new Date(Math.min(at, now.getTime() + 7 * 86_400_000)) : null
 }
 
+/** A readable reason for a failed request, including the underlying code (DNS, TLS, refused…). */
+export function networkError(e: unknown, timeoutMs: number): string {
+  const err = e as Error & { cause?: { code?: string; message?: string } }
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return `timed out after ${timeoutMs} ms`
+  const cause = err?.cause?.code || err?.cause?.message
+  return `network error: ${err?.message ?? String(e)}${cause ? ` (${cause})` : ''}`
+}
+
 /** Same site = identical host ignoring a leading "www.". */
 export function sameSite(a: URL, b: URL): boolean {
   return a.hostname.replace(/^www\./, '').toLowerCase() === b.hostname.replace(/^www\./, '').toLowerCase()
@@ -148,7 +156,8 @@ export function createFetcher(deps: FetcherDeps) {
     let state = await store.getDomain(host)
     if (state?.blocked) return { allowed: () => false, crawlDelay: null, nextAllowedAt: null, blocked: state.blocked_reason ?? 'blocked' }
 
-    const fresh = state?.robots_fetched_at && now().getTime() - Date.parse(state.robots_fetched_at) < ROBOTS_TTL_MS
+    // Only a definite answer (2xx/4xx) is cached; after a server or network error we ask again next time.
+    const fresh = state?.robots_fetched_at && (state.robots_status ?? 0) < 500 && now().getTime() - Date.parse(state.robots_fetched_at) < ROBOTS_TTL_MS
     if (!fresh) {
       const robotsUrl = `${origin.protocol}//${origin.host}/robots.txt`
       const deferred = await takeSlot(host, state?.crawl_delay_sec ?? null, state?.next_allowed_at ?? null)
@@ -163,8 +172,15 @@ export function createFetcher(deps: FetcherDeps) {
         if (status >= 300 && status < 400) status = 404
         if (status >= 200 && status < 300) body = (await readCapped(res, ROBOTS_MAX_BYTES)).text
         else await res.body?.cancel().catch(() => {})
-      } catch {
-        status = 599 // unreachable ⇒ RFC 9309: assume complete disallow
+      } catch (e) {
+        // Unreachable ⇒ RFC 9309: crawl nothing now. That is a temporary failure, not the site's
+        // wish, so report an error (retried with backoff) instead of a long "blocked" pause.
+        await release(host, null)
+        return { kind: 'error', url: robotsUrl, status: null, message: `robots.txt unreachable: ${networkError(e, timeoutMs)}` }
+      }
+      if (status >= 500) {
+        await release(host, null)
+        return { kind: 'error', url: robotsUrl, status, message: `robots.txt server error (HTTP ${status}); not crawling until it answers` }
       }
       const rules = robotsFromResponse(status, body, ua)
       await store.putDomain(host, {
@@ -213,8 +229,7 @@ export function createFetcher(deps: FetcherDeps) {
       res = await request(u.toString(), headers)
     } catch (e) {
       await release(host, robots.crawlDelay)
-      const timedOut = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')
-      return { kind: 'error', url, status: null, message: timedOut ? `timed out after ${timeoutMs} ms` : `network error: ${(e as Error).message}` }
+      return { kind: 'error', url, status: null, message: networkError(e, timeoutMs) }
     }
 
     await release(host, robots.crawlDelay)
