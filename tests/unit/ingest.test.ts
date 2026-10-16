@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { dayIndex, parseDays, parseOsmOpeningHours, parseTimeRange } from '@/core/ingest/timeparse'
-import { businessHoursFromJsonLd, extractFromText, extractHappyHour, findCandidateLinks, htmlToText, parseJsonLd } from '@/core/ingest/extract'
+import { businessHoursFromJsonLd, extractFromText, extractHappyHour, findCandidateLinks, findPublishedDate, htmlToText, parseJsonLd } from '@/core/ingest/extract'
 import { findingFingerprint, schedulesAgree, validateFinding } from '@/core/ingest/validate'
 import { assess, decideApply, recencyFactor, reliability } from '@/core/ingest/confidence'
 import { findBestMatch, nameSimilarity, normalizePhone, websiteDomain } from '@/core/ingest/match'
@@ -75,7 +75,8 @@ describe('extraction from official websites', () => {
     expect(f.restrictions).toEqual(['Bar area only', 'Not on holidays'])
     // "9pm-close" has no end time: dropped, never guessed.
     expect(f.windows.some((w) => w.start === '21:00')).toBe(false)
-    expect(f.sourcePublishedAt).toBe('2026-09-02T14:00:00.000Z')
+    // The page-wide article:modified_time stamp is not a statement about the happy hour.
+    expect(f.sourcePublishedAt).toBeNull()
     // Every fact has a verbatim quote from the page.
     const text = htmlToText(fixture('official-site.html'))
     for (const e of f.evidence) expect(text).toContain(e.quote)
@@ -195,6 +196,11 @@ describe('confidence and verification status', () => {
     expect(recencyFactor({ checkedAt: NOW, sourcePublishedAt: null }, now)).toBe(1)
     expect(recencyFactor({ checkedAt: NOW, sourcePublishedAt: '2025-06-01T00:00:00Z' }, now)).toBe(0.25)
     expect(assess([finding({ sourcePublishedAt: '2025-06-01T00:00:00Z' })], now).status).toBe('outdated')
+    // Only a date the page states in its text counts; an old CMS stamp does not make it outdated.
+    const stale = '<meta property="article:modified_time" content="2024-01-05T00:00:00Z"><p>Happy Hour Mon-Fri 4-7pm. $5 wells.</p>'
+    expect(findPublishedDate(stale, htmlToText(stale))).toBeNull()
+    const stated = '<p>Happy Hour menu updated: March 3, 2024</p>'
+    expect(findPublishedDate(stated, htmlToText(stated))).toBe(new Date('March 3, 2024').toISOString())
   })
 
   it('corroboration raises confidence; conflicts cap it and are flagged', () => {

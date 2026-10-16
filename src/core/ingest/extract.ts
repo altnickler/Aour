@@ -290,9 +290,13 @@ export function extractFromJsonLd(nodes: Json[], sourceUrl: string | null, check
 }
 
 /** Visible "last updated" dates on the page, if stated (used for recency, never invented). */
-export function findPublishedDate(html: string, text: string): string | null {
-  const meta = /<meta[^>]+(?:property|name)=["'](?:article:modified_time|og:updated_time|last-modified|dcterms\.modified)["'][^>]+content=["']([^"']+)["']/i.exec(html)
-  if (meta && !Number.isNaN(Date.parse(meta[1]))) return new Date(meta[1]).toISOString()
+/**
+ * A date the page itself states for its content ("Updated March 3, 2026", "effective 1/5/2026").
+ * Page-wide CMS stamps (article:modified_time, og:updated_time…) are deliberately ignored: SEO
+ * plugins add them to every page, and a homepage nobody edited for a year still shows the current
+ * happy hour — production marked well-known venues "outdated" because of them.
+ */
+export function findPublishedDate(_html: string, text: string): string | null {
   const m = /\b(?:updated|last updated|effective)[:\s]+([A-Z][a-z]+ \d{1,2},? \d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i.exec(text)
   if (m && !Number.isNaN(Date.parse(m[1]))) return new Date(m[1]).toISOString()
   return null

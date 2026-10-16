@@ -7,6 +7,7 @@
  *   npx tsx scripts/maintenance.ts robots         # READ-ONLY: venue domains robots.txt keeps us out of, and why
  *   npx tsx scripts/maintenance.ts robots --probe # …plus one request per problem domain to show the real error
  *   npx tsx scripts/maintenance.ts robots --recheck [--apply]  # lift blocks caused by our own detection mistakes
+ *   npx tsx scripts/maintenance.ts refresh-outdated [--apply]  # re-read venues wrongly marked outdated
  *
  * reclassify re-reads the market from Overture with the current classifier and, for imported
  * listings it no longer accepts, sets status = 'archived' (reversible; nothing is deleted) — only
@@ -293,7 +294,36 @@ async function recheck() {
   console.log(`\nApplied: lifted ${unblock.length} blocks, cleared ${unreachable.length} cached robots.txt errors, rescheduled ${venues.length} venues.`)
 }
 
+/**
+ * Undo "outdated" labels caused by page-wide CMS dates (article:modified_time etc.), which the
+ * extractor no longer uses: clears that date on official-website text findings and re-reads the
+ * pages of automation-managed listings marked outdated, now. Admin-managed listings are untouched.
+ */
+async function refreshOutdated() {
+  const apply = process.argv.includes('--apply')
+  const db = await supabase()
+  const findings = await db.all<{ id: string }>('hh_findings?select=id&source_kind=eq.official_website&method=eq.pattern&source_published_at=not.is.null&order=id')
+  const outdated = await db.all<{ id: string; name: string }>("establishments?select=id,name&hh_status=eq.outdated&hh_managed_by=eq.auto&status=in.(published,draft)&order=id")
+  console.log(`${findings.length} website findings carry a page-wide date; ${outdated.length} listings marked outdated: ${outdated.map((e) => e.name).join(' · ') || 'none'}`)
+  if (!apply) {
+    console.log('\nDry run: nothing changed. Run "refresh-outdated --apply" to apply.')
+    return
+  }
+  for (let i = 0; i < findings.length; i += 100) {
+    await db.req('PATCH', `hh_findings?id=in.(${findings.slice(i, i + 100).map((f) => f.id).join(',')})`, { source_published_at: null }, 'return=minimal')
+  }
+  const now = new Date().toISOString()
+  for (let i = 0; i < outdated.length; i += 100) {
+    const ids = outdated.slice(i, i + 100).map((e) => e.id).join(',')
+    // Forget cached validators so every page is read again with the current extractor.
+    await db.req('PATCH', `source_documents?establishment_id=in.(${ids})`, { etag: null, last_modified: null, content_hash: null }, 'return=minimal')
+    await db.req('PATCH', `establishments?id=in.(${ids})`, { next_enrich_at: now }, 'return=minimal')
+  }
+  console.log(`\nApplied: cleared ${findings.length} page-wide dates, scheduled ${outdated.length} listings for an immediate re-check.`)
+}
+
 const tasks: Record<string, () => Promise<void>> = {
+  'refresh-outdated': refreshOutdated,
   diagnose,
   reclassify,
   robots: () => (process.argv.includes('--recheck') ? recheck() : robots()),

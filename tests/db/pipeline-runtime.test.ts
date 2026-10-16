@@ -298,6 +298,22 @@ describe('enrichment from a venue website', () => {
     expect(await windows(v.id)).toHaveLength(1)
   })
 
+  it('re-checks the page where it found happy hour even after the homepage drops the link', async () => {
+    const v = await venue()
+    const web = fakeWeb(siteRoutes(v.base, { '/': HOME, '/happy-hour': fx('official-site.html') }))
+    await enrichEstablishment(v.id, deps(web))
+    expect((await row(v.id)).hh_status).toBe('establishment_reported')
+
+    // Redesigned homepage: new links, none to /happy-hour.
+    web.routes[`${v.base}/`] = HOME.replace(/<nav>[\s\S]*?<\/nav>/, '<nav><a href="/events">Events</a> <a href="/gallery">Gallery</a> <a href="/contact">Contact</a></nav>') + ' '
+    const c = clock()
+    await c.sleep(60_000)
+    const r = await enrichEstablishment(v.id, deps(web, c))
+    expect(r.action).not.toBe('outdated')
+    expect(web.calls.map((x) => x.url)).toContain(`${v.base}/happy-hour`)
+    expect((await row(v.id)).hh_status).toBe('establishment_reported')
+  })
+
   it('queues unparseable happy-hour mentions for a human when AI extraction is off', async () => {
     const v = await venue()
     const web = fakeWeb(siteRoutes(v.base, { '/': HOME, '/happy-hour': fx('ambiguous.html') }))

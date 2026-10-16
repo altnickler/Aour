@@ -112,10 +112,17 @@ export async function enrichEstablishment(id: string, deps: EnrichDeps): Promise
   }
 
   // Sub-pages: fresh links when the homepage changed, otherwise the pages we checked last time.
-  const subpages =
-    homeResult.kind === 'ok'
-      ? findCandidateLinks(homeResult.html, homeResult.url, MAX_SUBPAGES)
-      : [...docs.keys()].filter((u) => u !== home).slice(0, MAX_SUBPAGES)
+  // Pages where we found happy-hour facts before always come first, so a redesigned homepage with
+  // different links cannot make us miss the happy-hour page and wrongly call it gone.
+  const known = target.findings
+    .filter((f) => f.sourceKind === 'official_website' && f.sourceUrl && f.sourceUrl !== home && (f.windows.length || f.specials.length))
+    .map((f) => f.sourceUrl!)
+  const subpages = [
+    ...new Set([
+      ...known,
+      ...(homeResult.kind === 'ok' ? findCandidateLinks(homeResult.html, homeResult.url, MAX_SUBPAGES) : [...docs.keys()].filter((u) => u !== home)),
+    ]),
+  ].slice(0, MAX_SUBPAGES)
   for (const url of subpages) {
     const r = await fetchOne(url)
     if (r.kind === 'deferred' || r.kind === 'budget') break // keep what we have; the rest waits for the next run
@@ -165,8 +172,10 @@ export async function enrichEstablishment(id: string, deps: EnrichDeps): Promise
     return { outcome: 'changed', action: res.action, reason: 'mentioned but unparsed; queued for review', pages, nextAt: await schedule('changed', true) }
   }
 
-  if (!fetched.length) {
-    // Every page we know is unchanged: re-confirm the current facts.
+  // Every page we know is unchanged, or the page holding the facts is unchanged (only the homepage or
+  // another page changed): re-confirm the current facts rather than calling them gone.
+  const confirmedByUnchanged = target.findings.some((f) => f.sourceUrl && unchangedUrls.has(f.sourceUrl) && (f.windows.length || f.specials.length))
+  if (!fetched.length || confirmedByUnchanged) {
     const assessment = assess(previous, now())
     const primary = assessment.primary
     if (primary && target.fingerprint && findingFingerprint(primary) === target.fingerprint && assessment.status !== 'verified') {
