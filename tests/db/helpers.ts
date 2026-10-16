@@ -96,3 +96,21 @@ export async function stats(pool: pg.Pool, establishmentId: string) {
   const { rows } = await pool.query(`select * from public.establishment_stats where establishment_id = $1`, [establishmentId])
   return rows[0]
 }
+
+/** Run as the Supabase service role (what the Worker / CI pipeline uses). Bypasses RLS. */
+export async function asService<T>(pool: pg.Pool, fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
+  const c = await pool.connect()
+  try {
+    await c.query('begin')
+    await c.query('set local role service_role')
+    await c.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ role: 'service_role' })])
+    const result = await fn(c)
+    await c.query('commit')
+    return result
+  } catch (e) {
+    await c.query('rollback')
+    throw e
+  } finally {
+    c.release()
+  }
+}

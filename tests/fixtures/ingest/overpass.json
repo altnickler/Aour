@@ -1,0 +1,16 @@
+{
+  "version": 0.6,
+  "osm3s": { "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL." },
+  "elements": [
+    { "type": "node", "id": 9000000001, "lat": 27.1971, "lon": -80.2531,
+      "tags": { "amenity": "bar", "name": "Fixture Tavern", "addr:housenumber": "10", "addr:street": "Example Street", "addr:city": "Stuart", "addr:state": "FL",
+                "website": "fixturetavern.example", "phone": "+1 772-555-0100", "opening_hours": "Mo-Su 11:00-02:00", "happy_hours": "Mo-Fr 16:00-19:00; Sa,Su 21:00-01:00", "outdoor_seating": "yes" } },
+    { "type": "way", "id": 9000000002, "center": { "lat": 27.2001, "lon": -80.2502 },
+      "tags": { "amenity": "restaurant", "name": "Fixture Bay Oyster House", "cuisine": "seafood", "website": "https://www.fixturebay.example/", "opening_hours": "Mo-Su 11:00-22:00" } },
+    { "type": "node", "id": 9000000003, "lat": 27.1975, "lon": -80.2525, "tags": { "amenity": "fast_food", "name": "Fixture Burger Drive-Thru" } },
+    { "type": "node", "id": 9000000004, "lat": 27.1990, "lon": -80.2540, "tags": { "amenity": "cafe", "name": "Fixture Coffee" } },
+    { "type": "node", "id": 9000000005, "lat": 27.1980, "lon": -80.2560, "tags": { "craft": "brewery", "name": "Fixture Hall Taproom", "website": "https://fixturehall.example" } },
+    { "type": "node", "id": 9000000006, "lat": 27.1960, "lon": -80.2510, "tags": { "amenity": "bar" } },
+    { "type": "node", "id": 9000000007, "lat": 27.1950, "lon": -80.2500, "tags": { "amenity": "pub", "name": "Fixture Old Pub", "disused:amenity": "pub" } }
+  ]
+}
