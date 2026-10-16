@@ -50,17 +50,18 @@ export interface FetcherDeps {
 
 export type Fetcher = ReturnType<typeof createFetcher>
 
-const CHALLENGE_MARKERS = [
-  /<title>\s*(just a moment|attention required|access denied|are you a robot|security check)/i,
-  /cf-chl-|challenge-platform|cf_chl_opt/i,
-  /g-recaptcha|hcaptcha\.com|captcha-delivery\.com|px-captcha|perimeterx|datadome/i,
-]
+/** Present only on an actual challenge / block page. */
+const CHALLENGE_PAGE = [/<title>\s*(just a moment|attention required|access denied|are you a robot|security check)/i, /cf-chl-|cf_chl_opt/i]
+/** Bot-protection scripts that also run on ordinary pages (Cloudflare's JS detection, CAPTCHA widgets). */
+const PROTECTION_SCRIPTS = [/challenge-platform/i, /g-recaptcha|hcaptcha\.com|captcha-delivery\.com|px-captcha|perimeterx|datadome/i]
 
 export function looksLikeChallenge(status: number, headers: Headers, body: string): boolean {
   if (headers.get('cf-mitigated') === 'challenge') return true
-  // Only treat CAPTCHA widgets as a block when the page is a gate, not a contact form with a CAPTCHA.
-  const isGate = status === 403 || status === 503 || status === 429 || body.length < 20_000
-  return isGate && CHALLENGE_MARKERS.some((re) => re.test(body))
+  if (CHALLENGE_PAGE.some((re) => re.test(body))) return true
+  // A protection script on a page that was served normally (2xx) is not a block: Cloudflare adds
+  // /cdn-cgi/challenge-platform/ to every page of many small sites, and contact forms carry CAPTCHAs.
+  const refused = status === 401 || status === 403 || status === 429 || status === 503
+  return refused && PROTECTION_SCRIPTS.some((re) => re.test(body))
 }
 
 export function parseRetryAfter(value: string | null, now: Date): Date | null {

@@ -6,6 +6,7 @@
  *   npx tsx scripts/maintenance.ts reclassify --apply
  *   npx tsx scripts/maintenance.ts robots         # READ-ONLY: venue domains robots.txt keeps us out of, and why
  *   npx tsx scripts/maintenance.ts robots --probe # …plus one request per problem domain to show the real error
+ *   npx tsx scripts/maintenance.ts robots --recheck [--apply]  # lift blocks caused by our own detection mistakes
  *
  * reclassify re-reads the market from Overture with the current classifier and, for imported
  * listings it no longer accepts, sets status = 'archived' (reversible; nothing is deleted) — only
@@ -17,7 +18,7 @@
 import { bboxAround, overtureToCandidate, type OvertureRow } from '../src/core/ingest/providers'
 import { openOverture, overtureSql, primaryCategoryExpr } from '../src/pipeline/providers/overture'
 import { isAllowed, robotsFromResponse } from '../src/core/ingest/robots'
-import { USER_AGENT } from '../src/pipeline/fetcher'
+import { looksLikeChallenge, USER_AGENT } from '../src/pipeline/fetcher'
 
 const task = process.argv[2] ?? 'diagnose'
 const MARKET = { lat: Number(process.env.MARKET_LAT ?? 27.1975), lng: Number(process.env.MARKET_LNG ?? -80.2528), radiusMiles: Number(process.env.MARKET_RADIUS ?? 15) }
@@ -236,7 +237,67 @@ async function robots() {
   }
 }
 
-const tasks: Record<string, () => Promise<void>> = { diagnose, reclassify, robots }
+/**
+ * Undo crawl pauses caused by our own earlier mistakes (never by a site's wishes):
+ *  - "anti-bot challenge" blocks whose homepage now loads normally (one polite GET per domain);
+ *  - robots.txt answers cached after a network/server error (the fetcher no longer caches those).
+ * Venues on those domains are rescheduled for a website check now. Genuine challenges, robots.txt
+ * disallows and 401/403 refusals are left alone. Nothing is deleted; every change is printed.
+ */
+async function recheck() {
+  const apply = process.argv.includes('--apply')
+  const db = await supabase()
+  const domains = await db.all<{ domain: string; robots_status: number | null; blocked: boolean; blocked_reason: string | null }>(
+    'source_domains?select=domain,robots_status,blocked,blocked_reason&order=domain',
+  )
+  const unblock: string[] = []
+  for (const d of domains.filter((x) => x.blocked && x.blocked_reason === 'anti-bot challenge')) {
+    try {
+      const res = await fetch(`https://${d.domain}/`, { headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' }, redirect: 'manual', signal: AbortSignal.timeout(15_000) })
+      const body = res.status >= 300 && res.status < 400 ? '' : await res.text()
+      const ok = res.status < 400 && !looksLikeChallenge(res.status, res.headers, body)
+      console.log(`${ok ? 'UNBLOCK' : 'keep   '} ${d.domain}: HTTP ${res.status}${ok ? '' : looksLikeChallenge(res.status, res.headers, body) ? ' (challenge page)' : ''}`)
+      if (ok) unblock.push(d.domain)
+    } catch (e) {
+      console.log(`keep    ${d.domain}: ${(e as Error).message}`)
+    }
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  const unreachable = domains.filter((x) => !x.blocked && (x.robots_status ?? 0) >= 500).map((x) => x.domain)
+  console.log(`\n${unblock.length} challenge blocks to lift; ${unreachable.length} domains whose robots.txt was unreachable will be asked again.`)
+
+  const hosts = new Set([...unblock, ...unreachable])
+  const venues = (
+    await db.all<{ id: string; name: string; website: string | null; next_enrich_at: string | null }>(
+      'establishments?select=id,name,website,next_enrich_at&status=in.(published,draft)&website=not.is.null&order=id',
+    )
+  ).filter((e) => {
+    try {
+      return hosts.has(new URL(e.website!).hostname.toLowerCase()) && (!e.next_enrich_at || Date.parse(e.next_enrich_at) > Date.now() + 3_600_000)
+    } catch {
+      return false
+    }
+  })
+  console.log(`${venues.length} venues to re-check now: ${venues.slice(0, 30).map((v) => v.name).join(' · ')}${venues.length > 30 ? ' …' : ''}`)
+  if (!apply) {
+    console.log('\nDry run: nothing changed. Run "robots --recheck --apply" to apply.')
+    return
+  }
+  for (const d of unblock) await db.req('PATCH', `source_domains?domain=eq.${encodeURIComponent(d)}`, { blocked: false, blocked_reason: null }, 'return=minimal')
+  for (const d of unreachable) await db.req('PATCH', `source_domains?domain=eq.${encodeURIComponent(d)}`, { robots_fetched_at: null }, 'return=minimal')
+  const now = new Date().toISOString()
+  for (let i = 0; i < venues.length; i += 100) {
+    const ids = venues.slice(i, i + 100).map((v) => v.id).join(',')
+    await db.req('PATCH', `establishments?id=in.(${ids})`, { next_enrich_at: now }, 'return=minimal')
+  }
+  console.log(`\nApplied: lifted ${unblock.length} blocks, cleared ${unreachable.length} cached robots.txt errors, rescheduled ${venues.length} venues.`)
+}
+
+const tasks: Record<string, () => Promise<void>> = {
+  diagnose,
+  reclassify,
+  robots: () => (process.argv.includes('--recheck') ? recheck() : robots()),
+}
 if (!tasks[task]) {
   console.error(`Unknown task "${task}". Tasks: ${Object.keys(tasks).join(', ')}`)
   process.exit(2)

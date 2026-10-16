@@ -103,6 +103,17 @@ describe('fetcher helpers', () => {
     expect(looksLikeChallenge(200, h, bigPage)).toBe(false)
   })
 
+  it('does not mistake Cloudflare\'s page script or a small contact page for a challenge', () => {
+    const h = new Headers()
+    // Seen in production: normal 200 pages that load /cdn-cgi/challenge-platform/scripts/jsd/main.js.
+    const normal = `<html><head><title>Zakura | Port Saint Lucie</title></head><body><p>Menu</p><script>a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js'</script></body></html>`
+    expect(looksLikeChallenge(200, h, normal)).toBe(false)
+    expect(looksLikeChallenge(200, h, '<form><div class="g-recaptcha"></div></form>')).toBe(false)
+    expect(looksLikeChallenge(403, h, normal)).toBe(true)
+    expect(looksLikeChallenge(403, h, '<title>Attention Required! | Cloudflare</title>')).toBe(true)
+    expect(looksLikeChallenge(200, h, '<script>window._cf_chl_opt={}</script>')).toBe(true)
+  })
+
   it('treats www and apex as the same site only', () => {
     expect(sameSite(new URL('https://www.a.example/x'), new URL('https://a.example/y'))).toBe(true)
     expect(sameSite(new URL('https://a.example/'), new URL('https://b.example/'))).toBe(false)
