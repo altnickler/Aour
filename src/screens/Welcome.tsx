@@ -3,13 +3,14 @@ import { LocateFixed, MapPin } from 'lucide-react'
 import { useLocationState } from '@/app/location'
 import { Mark } from '@/components/brand'
 import { Button, Chip } from '@/components/ui'
+import { PlaceSearch } from '@/components/PlaceSearch'
 
 /**
  * One-screen welcome: pick an area (or share location) and start browsing.
  * No account, no friend-finding, no tutorial carousel.
  */
 export default function WelcomeScreen() {
-  const { market, area, setArea, requestLocation, origin, locating, locationError, completeOnboarding } = useLocationState()
+  const { market, markets, center, area, setArea, choosePlace, requestLocation, origin, locating, locationError, completeOnboarding } = useLocationState()
   const navigate = useNavigate()
   const start = () => {
     completeOnboarding()
@@ -32,21 +33,27 @@ export default function WelcomeScreen() {
 
       <div className="flex-1 px-6 pt-7">
         <h2 className="text-lg font-extrabold text-choc">Where do you go for happy hour?</h2>
-        <p className="mt-1 text-sm text-muted">Launching first in {market?.name ?? 'Stuart & Martin County'}, Florida.</p>
+        <p className="mt-1 text-sm text-muted">Launching first in {markets[0]?.name ?? 'Stuart & Martin County'}, Florida. Search anywhere — we'll show what we know.</p>
         <Button variant="secondary" block className="mt-4" loading={locating} onClick={requestLocation}>
           <LocateFixed className="size-4" /> {origin ? 'Using your location ✓' : 'Use my location'}
         </Button>
-        {locationError && <p className="mt-2 text-sm text-danger">{locationError}</p>}
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Chip selected={!area} onClick={() => setArea(null)}>
-            <MapPin className="size-3.5" /> Everywhere
-          </Chip>
-          {(market?.areas ?? []).map((a) => (
-            <Chip key={a} selected={area === a} onClick={() => setArea(a)}>
-              {a}
-            </Chip>
-          ))}
+        {locationError && <p className="mt-2 text-sm text-danger" role="alert">{locationError}</p>}
+        <div className="mt-5">
+          <PlaceSearch onPick={(r) => choosePlace(r)} />
+          {center?.kind === 'place' && <p className="mt-2 text-sm font-semibold text-choc">Selected: {center.label} ✓</p>}
         </div>
+        {market && center?.kind !== 'device' && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Chip selected={!area} onClick={() => setArea(null)}>
+              <MapPin className="size-3.5" /> All of {market.name}
+            </Chip>
+            {market.areas.map((a) => (
+              <Chip key={a} selected={area === a} onClick={() => setArea(a)}>
+                {a}
+              </Chip>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="px-6 pt-6 pb-6">

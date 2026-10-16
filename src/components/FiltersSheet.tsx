@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { DEFAULT_FILTERS, type DiscoveryFilters, type DiscoverySort } from '@/core/discovery'
+import { DEFAULT_FILTERS, RADIUS_OPTIONS, SORT_LABEL, type DiscoveryFilters, type DiscoverySort } from '@/core/discovery'
 import { DAY_SHORT } from '@/core/schedule'
 import { ESTABLISHMENT_KINDS } from '@/core/listing'
 import { TAGS } from '@/core/categories'
@@ -15,13 +15,7 @@ const TIMES = [
   { label: '9pm+', value: 21 * 60 },
 ]
 
-const SORTS: { key: DiscoverySort; label: string }[] = [
-  { key: 'recommended', label: 'Recommended' },
-  { key: 'rating', label: 'Top rated' },
-  { key: 'distance', label: 'Closest' },
-  { key: 'ending_soon', label: 'Ending soon' },
-  { key: 'name', label: 'A–Z' },
-]
+const SORTS: DiscoverySort[] = ['recommended', 'distance', 'rating', 'drinks', 'food', 'value', 'ending_soon']
 
 export function FiltersSheet({
   open,
@@ -36,7 +30,7 @@ export function FiltersSheet({
   sort: DiscoverySort
   onApply: (f: DiscoveryFilters, s: DiscoverySort) => void
 }) {
-  const { market, origin } = useLocationState()
+  const { market, center, radiusMiles, setRadius } = useLocationState()
   const [f, setF] = useState(filters)
   const [s, setS] = useState(sort)
   const [syncedOpen, setSyncedOpen] = useState(open)
@@ -68,9 +62,9 @@ export function FiltersSheet({
     >
       <div className="space-y-6 py-2">
         <Group title="Sort by">
-          {SORTS.map((o) => (
-            <Chip key={o.key} selected={s === o.key} onClick={() => setS(o.key)} disabled={o.key === 'distance' && !origin && !market}>
-              {o.label}
+          {SORTS.map((k) => (
+            <Chip key={k} selected={s === k} onClick={() => setS(k)}>
+              {SORT_LABEL[k]}
             </Chip>
           ))}
         </Group>
@@ -80,7 +74,9 @@ export function FiltersSheet({
             [
               ['any', 'Any day'],
               ['now', 'Happening now'],
-              ['today', 'Later today'],
+              ['later', 'Later today'],
+              ['tomorrow', 'Tomorrow'],
+              ['weekend', 'This weekend'],
               ['day', 'Pick a day'],
             ] as const
           ).map(([k, label]) => (
@@ -108,13 +104,15 @@ export function FiltersSheet({
           </>
         )}
 
-        <Group title="Distance">
-          {[null, 1, 3, 5, 10].map((m) => (
-            <Chip key={String(m)} selected={f.maxMiles === m} onClick={() => setF({ ...f, maxMiles: m })}>
-              {m === null ? 'Any' : `${m} mi`}
+        <Group title="Within">
+          {RADIUS_OPTIONS.map((m) => (
+            <Chip key={m} selected={radiusMiles === m} onClick={() => setRadius(m)}>
+              {m} mi
             </Chip>
           ))}
-          {!origin && <p className="w-full text-xs text-muted">Measured from the {market?.name ?? 'area'} center unless you share your location.</p>}
+          <p className="w-full text-xs text-muted">
+            {center?.kind === 'device' ? 'Measured from your approximate location.' : `Measured from ${center?.label ?? 'the selected area'}.`}
+          </p>
         </Group>
 
         <Group title="Community rating">
@@ -155,7 +153,7 @@ export function FiltersSheet({
         )}
 
         <div className="rounded-card bg-white px-4 shadow-card">
-          <Toggle checked={f.verifiedOnly} onChange={(v) => setF({ ...f, verifiedOnly: v })} label="Recently verified only" description="Happy-hour details confirmed in the last 90 days" />
+          <Toggle checked={f.verifiedOnly} onChange={(v) => setF({ ...f, verifiedOnly: v })} label="Verified only" description="Details confirmed by the Aour team in the last 90 days" />
         </div>
       </div>
     </Sheet>

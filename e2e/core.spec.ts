@@ -26,9 +26,11 @@ test.describe('Discover without an account', () => {
 
   test('unverified and outdated listings are clearly flagged', async ({ page }) => {
     await start(page, '/place/seagrape-supper-club')
-    await expect(page.getByText(/haven’t been verified yet/)).toBeVisible()
+    await expect(page.getByText('Needs verification').first()).toBeVisible()
+    await expect(page.getByText(/not been able to confirm them yet/)).toBeVisible()
     await page.goto('/place/hobe-harbor-taproom')
-    await expect(page.getByText(/may be out of date/)).toBeVisible()
+    await expect(page.getByText('Outdated', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText(/may no longer be accurate/)).toBeVisible()
   })
 
   test('search and filters', async ({ page }) => {

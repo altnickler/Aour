@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Map as MapIcon, Search as SearchIcon, SlidersHorizontal, X } from 'lucide-react'
 import { useDiscovery } from '@/app/useDiscovery'
 import { useFilterState } from '@/app/filters'
-import { activeFilterCount, filterEstablishments, sortEstablishments } from '@/core/discovery'
+import { activeFilterCount, filterEstablishments, sortEstablishments, type WhenFilter } from '@/core/discovery'
+
+const WHEN_LABEL: Record<WhenFilter, string> = { any: 'Any time', now: 'Now', later: 'Later today', tomorrow: 'Tomorrow', weekend: 'This weekend', day: 'Selected day' }
 import { api } from '@/data'
 import { FiltersSheet } from '@/components/FiltersSheet'
 import { PlaceRow } from '@/components/place'
@@ -13,7 +15,7 @@ import { Avatar, Chip, EmptyState, ErrorState, IconButton, Segmented, Skeleton }
 import { TAG_BY_KEY } from '@/core/categories'
 
 export default function SearchScreen() {
-  const { listings, ctx, personal, now, origin } = useDiscovery()
+  const { listings, ctx, personal, now, referencePoint: origin } = useDiscovery()
   const [{ filters, sort }, setState] = useFilterState()
   const [tab, setTab] = useState<'places' | 'people'>('places')
   const [open, setOpen] = useState(false)
@@ -82,7 +84,7 @@ export default function SearchScreen() {
         <>
           {count > 0 && (
             <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2">
-              {filters.when !== 'any' && <Chip selected onClick={() => setState({ filters: { ...filters, when: 'any' } })}>{filters.when === 'now' ? 'Now' : filters.when === 'today' ? 'Today' : 'Selected day'} ✕</Chip>}
+              {filters.when !== 'any' && <Chip selected onClick={() => setState({ filters: { ...filters, when: 'any' } })}>{WHEN_LABEL[filters.when]} ✕</Chip>}
               {filters.tags.map((t) => (
                 <Chip key={t} selected onClick={() => setState({ filters: { ...filters, tags: filters.tags.filter((x) => x !== t) } })}>
                   {TAG_BY_KEY[t]?.label} ✕

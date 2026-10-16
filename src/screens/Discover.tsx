@@ -1,19 +1,46 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ChevronDown, MapPin, Map as MapIcon, Users, Plus } from 'lucide-react'
+import { ChevronDown, LocateFixed, MapPin, Map as MapIcon, Users, Plus, SlidersHorizontal } from 'lucide-react'
 import { useDiscovery } from '@/app/useDiscovery'
 import { useAuth } from '@/app/auth'
-import { buildShelves, filterEstablishments, sortEstablishments, DEFAULT_FILTERS, type DiscoveryShelf, type WhenFilter } from '@/core/discovery'
-import { useFeaturedCollections, useFriendActivity, useMyVisits, usePreferences } from '@/data/hooks'
+import {
+  buildShelves,
+  filterEstablishments,
+  hasHappyHourInfo,
+  sortEstablishments,
+  DEFAULT_FILTERS,
+  RADIUS_OPTIONS,
+  SORT_LABEL,
+  type DiscoveryFilters,
+  type DiscoveryShelf,
+  type DiscoverySort,
+  type WhenFilter,
+} from '@/core/discovery'
+import { useFeaturedCollections, useFriendActivity, useMyVisits, usePreferences, useRequestCoverage } from '@/data/hooks'
 import { Logo } from '@/components/brand'
 import { AreaSheet } from '@/components/AreaSheet'
-import { HappyHourPill, PlaceCard, PlaceCardSkeleton, PlaceThumb } from '@/components/place'
+import { HappyHourPill, PlaceCard, PlaceCardSkeleton, PlaceRow, PlaceThumb } from '@/components/place'
 import { ScoreBadge } from '@/components/score'
 import { Button, Chip, EmptyState, ErrorState, IconButton, Section } from '@/components/ui'
+import { useToast } from '@/components/toast'
 import { KIND_LABEL } from '@/core/listing'
 import type { Establishment } from '@/core/types'
 
 const PAGE = 10
+
+const WHEN: [WhenFilter, string][] = [
+  ['any', 'Any time'],
+  ['now', 'Happening now'],
+  ['later', 'Later today'],
+  ['tomorrow', 'Tomorrow'],
+  ['weekend', 'This weekend'],
+]
+const QUICK_SORTS: DiscoverySort[] = ['distance', 'rating', 'drinks', 'food', 'value']
+const QUICK_TAGS: [string, string][] = [
+  ['outdoor-seating', 'Outdoor seating'],
+  ['waterfront', 'Waterfront'],
+  ['date-night', 'Date night'],
+]
 
 function greeting(now: Date) {
   const h = now.getHours()
@@ -23,15 +50,21 @@ function greeting(now: Date) {
 }
 
 export default function DiscoverScreen() {
-  const { market, area, origin: deviceOrigin, listings, personal, ctx, now, onboarded } = useDiscovery()
+  const { center, radiusMiles, setRadius, area, setArea, listings, personal, ctx, now, onboarded, locationError } = useDiscovery()
   const { user, profile } = useAuth()
   const navigate = useNavigate()
+  const toast = useToast()
   const myVisits = useMyVisits()
   const prefs = usePreferences()
   const friendActivity = useFriendActivity()
   const featured = useFeaturedCollections()
+  const coverage = useRequestCoverage()
   const [when, setWhen] = useState<WhenFilter>('any')
+  const [sort, setSort] = useState<DiscoverySort>('recommended')
+  const [tags, setTags] = useState<string[]>([])
+  const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [areaOpen, setAreaOpen] = useState(false)
+  const [showCandidates, setShowCandidates] = useState(false)
   const [limit, setLimit] = useState(PAGE)
 
   // First launch: a lightweight welcome (skippable), never a wall.
@@ -39,26 +72,30 @@ export default function DiscoverScreen() {
     if (!onboarded && !user) navigate('/welcome', { replace: true })
   }, [onboarded, user, navigate])
 
-  const inArea = useMemo(
-    () => filterEstablishments(listings.data ?? [], { ...DEFAULT_FILTERS, area }, ctx),
-    [listings.data, area, ctx],
-  )
+  const inRange = useMemo(() => filterEstablishments(listings.data ?? [], { ...DEFAULT_FILTERS, area }, ctx), [listings.data, area, ctx])
+  const withInfo = useMemo(() => inRange.filter(hasHappyHourInfo), [inRange])
+  const candidates = useMemo(() => sortEstablishments(inRange.filter((e) => !hasHappyHourInfo(e)), 'distance', ctx), [inRange, ctx])
+  const filters: DiscoveryFilters = { ...DEFAULT_FILTERS, when, tags, verifiedOnly }
+  const filtering = when !== 'any' || tags.length > 0 || verifiedOnly || sort !== 'recommended'
   const shelves = useMemo(
-    () =>
-      buildShelves({
-        listings: inArea,
-        ctx,
-        myVisits: myVisits.data,
-        myWeights: prefs.data?.weights,
-        friendVisits: friendActivity.data,
-      }),
-    [inArea, ctx, myVisits.data, prefs.data, friendActivity.data],
+    () => buildShelves({ listings: withInfo, ctx, myVisits: myVisits.data, myWeights: prefs.data?.weights, friendVisits: friendActivity.data }),
+    [withInfo, ctx, myVisits.data, prefs.data, friendActivity.data],
   )
-  const all = useMemo(
-    () => sortEstablishments(filterEstablishments(inArea, { ...DEFAULT_FILTERS, when }, ctx), 'recommended', ctx, personal),
-    [inArea, when, ctx, personal],
+  const results = useMemo(
+    () => sortEstablishments(filterEstablishments(withInfo, filters, ctx), sort, ctx, personal),
+    [withInfo, when, tags, verifiedOnly, sort, ctx, personal], // eslint-disable-line react-hooks/exhaustive-deps
   )
-  const nowCount = useMemo(() => filterEstablishments(inArea, { ...DEFAULT_FILTERS, when: 'now' }, ctx).length, [inArea, ctx])
+  const nowCount = useMemo(() => filterEstablishments(withInfo, { ...DEFAULT_FILTERS, when: 'now' }, ctx).length, [withInfo, ctx])
+
+  const reset = () => {
+    setWhen('any')
+    setSort('recommended')
+    setTags([])
+    setVerifiedOnly(false)
+    setLimit(PAGE)
+  }
+  const where = center ? (center.kind === 'device' ? 'you' : center.label) : 'here'
+  const nextRadius = RADIUS_OPTIONS.find((r) => r > radiusMiles)
 
   return (
     <div>
@@ -69,10 +106,10 @@ export default function DiscoverScreen() {
             type="button"
             onClick={() => setAreaOpen(true)}
             className="press ml-1 flex min-w-0 items-center gap-1 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-choc shadow-press ring-1 ring-line"
-            aria-label={`Location: ${deviceOrigin ? 'Near me' : (area ?? market?.name ?? 'Choose')}. Change`}
+            aria-label={`Location: ${area ?? center?.label ?? 'not set'}, within ${radiusMiles} miles. Change`}
           >
-            <MapPin className="size-3.5 shrink-0 text-gold-deep" />
-            <span className="truncate">{deviceOrigin ? 'Near me' : (area ?? market?.name ?? '…')}</span>
+            {center?.kind === 'device' ? <LocateFixed className="size-3.5 shrink-0 text-gold-deep" /> : <MapPin className="size-3.5 shrink-0 text-gold-deep" />}
+            <span className="truncate">{area ?? center?.label ?? 'Choose a location'}</span>
             <ChevronDown className="size-3.5 shrink-0" />
           </button>
           <div className="ml-auto flex">
@@ -100,40 +137,70 @@ export default function DiscoverScreen() {
             'Find your next happy hour'
           )}
         </h1>
+        {center?.kind === 'market' && (
+          <p className="mt-1 text-sm text-muted">
+            Showing {center.label}.{' '}
+            <button type="button" className="font-bold text-choc underline" onClick={() => setAreaOpen(true)}>
+              Use your location or search a city
+            </button>
+          </p>
+        )}
+        {locationError && <p className="mt-1 text-sm text-danger" role="status">{locationError}</p>}
       </div>
 
-      <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto px-5" role="group" aria-label="When">
-        {(
-          [
-            ['any', 'All'],
-            ['now', 'Happening now'],
-            ['today', 'Today'],
-          ] as const
-        ).map(([k, label]) => (
+      <div className="no-scrollbar mt-4 flex items-center gap-2 overflow-x-auto px-5" role="group" aria-label="Search radius">
+        <span className="shrink-0 text-xs font-bold text-muted uppercase">Within</span>
+        {RADIUS_OPTIONS.map((r) => (
+          <Chip key={r} selected={!area && radiusMiles === r} onClick={() => { setRadius(r); setArea(null); setLimit(PAGE) }} aria-label={`${r} miles`}>
+            {r} mi
+          </Chip>
+        ))}
+      </div>
+
+      <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-5" role="group" aria-label="When">
+        {WHEN.map(([k, label]) => (
           <Chip key={k} selected={when === k} onClick={() => { setWhen(k); setLimit(PAGE) }}>
             {k === 'now' && <span className="size-2 rounded-full bg-success" aria-hidden />}
             {label}
           </Chip>
         ))}
-        <Chip onClick={() => navigate('/search')}>More filters</Chip>
+      </div>
+
+      <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-5" role="group" aria-label="Sort and filter">
+        {QUICK_SORTS.map((k) => (
+          <Chip key={k} selected={sort === k} aria-pressed={sort === k} onClick={() => { setSort(sort === k ? 'recommended' : k); setLimit(PAGE) }}>
+            {SORT_LABEL[k]}
+          </Chip>
+        ))}
+        {QUICK_TAGS.map(([k, label]) => (
+          <Chip key={k} selected={tags.includes(k)} aria-pressed={tags.includes(k)} onClick={() => setTags(tags.includes(k) ? tags.filter((t) => t !== k) : [...tags, k])}>
+            {label}
+          </Chip>
+        ))}
+        <Chip selected={verifiedOnly} aria-pressed={verifiedOnly} onClick={() => setVerifiedOnly(!verifiedOnly)}>
+          ✓ Verified only
+        </Chip>
+        <Chip onClick={() => navigate('/search')}>
+          <SlidersHorizontal className="size-3.5" /> More
+        </Chip>
       </div>
 
       {listings.isError ? (
         <ErrorState error={listings.error} retry={() => listings.refetch()} />
-      ) : listings.isLoading || !market ? (
+      ) : listings.isLoading || !center ? (
         <div className="mt-6 space-y-4 px-5">
           <PlaceCardSkeleton />
           <PlaceCardSkeleton />
         </div>
       ) : (
         <>
-          {when === 'any' &&
+          {!filtering &&
             shelves
               .filter((s) => s.key !== 'now')
               .slice(0, 6)
               .map((s) => <Shelf key={s.key} shelf={s} personal={personal} now={now} />)}
 
-          {when === 'any' && (featured.data?.length ?? 0) > 0 && (
+          {!filtering && (featured.data?.length ?? 0) > 0 && (
             <Section title="Featured collections">
               <div className="no-scrollbar snap-x-row flex gap-3 overflow-x-auto px-5 pb-2">
                 {featured.data!.map((c) => (
@@ -147,26 +214,68 @@ export default function DiscoverScreen() {
             </Section>
           )}
 
-          <Section title={when === 'now' ? 'Happening now' : when === 'today' ? 'Happy hours today' : 'All happy hours'} action={<span className="text-sm text-muted">{all.length}</span>}>
-            {all.length === 0 ? (
-              <EmptyState
-                icon="🍹"
-                title={when === 'now' ? 'Nothing on right now' : 'No happy hours here yet'}
-                body={when === 'now' ? 'Try "Today" to see what starts later.' : "Know a great one? Suggest it and we'll verify the details."}
-                action={
-                  when === 'now' ? (
-                    <Button variant="secondary" onClick={() => setWhen('today')}>Show today</Button>
-                  ) : (
-                    <Button variant="secondary" onClick={() => navigate('/suggest')}><Plus className="size-4" /> Suggest a place</Button>
-                  )
-                }
-              />
+          <Section
+            title={when !== 'any' ? WHEN.find(([k]) => k === when)![1] : area ? `Happy hours in ${area}` : `Happy hours within ${radiusMiles} mi`}
+            action={<span className="text-sm text-muted">{results.length}</span>}
+          >
+            {results.length === 0 ? (
+              withInfo.length === 0 ? (
+                <EmptyState
+                  icon="🧭"
+                  title={inRange.length ? `No happy-hour details near ${where} yet` : `Aour isn't in ${center.kind === 'device' ? 'your area' : center.label} yet`}
+                  body={
+                    inRange.length
+                      ? `We know ${inRange.length} ${inRange.length === 1 ? 'venue' : 'venues'} within ${radiusMiles} mi, but none with confirmed happy-hour information.`
+                      : `We don't have listings within ${radiusMiles} mi. Try a wider radius, or tell us you'd like Aour here.`
+                  }
+                  action={
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {nextRadius && (
+                        <Button variant="secondary" onClick={() => setRadius(nextRadius)}>
+                          Search {nextRadius} mi
+                        </Button>
+                      )}
+                      {center.kind !== 'market' && (
+                        <Button
+                          variant="secondary"
+                          loading={coverage.isPending}
+                          disabled={coverage.isSuccess}
+                          onClick={() =>
+                            coverage.mutate(
+                              { center: center.point, label: center.kind === 'place' ? center.label : null },
+                              { onSuccess: () => toast(`Thanks! We'll use this to decide where Aour goes next.`) },
+                            )
+                          }
+                        >
+                          {coverage.isSuccess ? 'Request sent' : 'Bring Aour here'}
+                        </Button>
+                      )}
+                      <Button variant="secondary" onClick={() => navigate('/suggest')}>
+                        <Plus className="size-4" /> Suggest a place
+                      </Button>
+                    </div>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon="🍹"
+                  title={when === 'now' ? 'Nothing on right now' : 'Nothing matches'}
+                  body={when === 'now' ? 'Try "Later today" to see what starts soon.' : 'Try fewer filters or a wider radius.'}
+                  action={
+                    when === 'now' ? (
+                      <Button variant="secondary" onClick={() => setWhen('later')}>Show later today</Button>
+                    ) : (
+                      <Button variant="secondary" onClick={reset}>Clear filters</Button>
+                    )
+                  }
+                />
+              )
             ) : (
               <div className="space-y-4 px-5">
-                {all.slice(0, limit).map((e) => (
-                  <PlaceCard key={e.id} place={e} origin={deviceOrigin} myScore={personal.get(e.id)} now={now} />
+                {results.slice(0, limit).map((e) => (
+                  <PlaceCard key={e.id} place={e} origin={center.point} myScore={personal.get(e.id)} now={now} />
                 ))}
-                {limit < all.length && (
+                {limit < results.length && (
                   <Button variant="secondary" block onClick={() => setLimit((l) => l + PAGE)}>
                     Show more
                   </Button>
@@ -174,6 +283,27 @@ export default function DiscoverScreen() {
               </div>
             )}
           </Section>
+
+          {candidates.length > 0 && (
+            <section className="mx-5 mt-8 rounded-card bg-white p-4 shadow-card" aria-labelledby="candidates-title">
+              <h2 id="candidates-title" className="font-extrabold text-choc">
+                Other venues nearby <span className="font-semibold text-muted">({candidates.length})</span>
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                Bars and restaurants from open map data. We haven't found happy-hour details for them — they may not have one. Know their deal? Tell us.
+              </p>
+              <Button className="mt-3" size="sm" variant="secondary" aria-expanded={showCandidates} onClick={() => setShowCandidates(!showCandidates)}>
+                {showCandidates ? 'Hide' : 'Show'} unconfirmed venues
+              </Button>
+              {showCandidates && (
+                <div className="mt-2 -mx-2">
+                  {candidates.slice(0, 30).map((e) => (
+                    <PlaceRow key={e.id} place={e} origin={center.point} now={now} trailing={<span className="text-xs font-semibold text-muted">Unconfirmed</span>} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           <div className="mx-5 mt-8 rounded-card bg-butter-soft p-5">
             <p className="font-extrabold text-choc">Missing a spot?</p>
@@ -224,4 +354,3 @@ function MiniCard({ place, myScore, now }: { place: Establishment; myScore?: num
     </Link>
   )
 }
-

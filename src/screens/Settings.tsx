@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, LogOut, RotateCcw, Trash2 } from 'lucide-react'
 import { useAuth } from '@/app/auth'
 import { useListingIndex, usePreferences, useRankings, useSavePreferences, useUpdateProfile } from '@/data/hooks'
-import { useLocationState } from '@/app/location'
 import { api } from '@/data'
 import { DEFAULT_WEIGHTS, buildRankings, validateWeights, weightShares, type Weights } from '@/core/rating'
 import { PRIMARY_CATEGORIES, PRIMARY_CATEGORY_KEYS } from '@/core/categories'
@@ -133,8 +132,7 @@ function WeightsCard() {
   const save = useSavePreferences()
   const toast = useToast()
   const { visits } = useRankings()
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const { index } = useListingIndex()
   const [draft, setDraft] = useState<Weights | null>(null)
   const weights = draft ?? prefs.data?.weights ?? DEFAULT_WEIGHTS
   const shares = weightShares(weights)

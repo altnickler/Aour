@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test'
 /** Skip the first-launch welcome (it is tested separately). */
 export async function start(page: Page, path = '/') {
   await page.addInitScript(() => {
-    if (!localStorage.getItem('aour-place-v1')) localStorage.setItem('aour-place-v1', JSON.stringify({ onboarded: true }))
+    if (!localStorage.getItem('aour-place-v2')) localStorage.setItem('aour-place-v2', JSON.stringify({ onboarded: true }))
   })
   await page.goto(path)
 }

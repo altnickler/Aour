@@ -5,7 +5,7 @@ import { usePlace, usePlaceReviews, useRankings } from '@/data/hooks'
 import { useAuth, useRequireAuth } from '@/app/auth'
 import { useNow } from '@/app/useNow'
 import { DAY_LONG, formatDays, formatRange, happyHourStatus } from '@/core/schedule'
-import { KIND_LABEL, appleMapsUrl, priceLabel } from '@/core/listing'
+import { KIND_LABEL, appleMapsUrl, priceLabel, verificationInfo } from '@/core/listing'
 import { AMENITY_BY_KEY, PRIMARY_CATEGORIES, TAG_BY_KEY, type PrimaryCategoryKey } from '@/core/categories'
 import { confidenceLabel, formatScore, meanScore } from '@/core/rating'
 import { api } from '@/data'
@@ -156,18 +156,19 @@ function PlaceView({ place }: { place: Establishment }) {
           <FreshnessBadge place={place} now={now} />
         </div>
         <div className="p-4">
-          {place.hhStatus === 'none' || place.windows.length === 0 ? (
-            <p className="text-[15px] text-muted">We don't have a verified happy hour for this place.</p>
+          {place.hhStatus === 'none' || (place.windows.length === 0 && place.specials.length === 0) ? (
+            <p className="text-[15px] text-muted">We haven't found happy-hour information for this place. If you know it, tell us below.</p>
           ) : (
             <>
               {place.hhStatus !== 'verified' && (
                 <p className="mb-3 flex gap-2 rounded-tile bg-gold/15 p-3 text-sm text-choc">
                   <AlertTriangle className="size-4 shrink-0 text-gold-deep" />
-                  {place.hhStatus === 'outdated'
-                    ? 'People reported these details may be out of date. Call ahead before you go.'
-                    : 'These details haven’t been verified yet. Call ahead before you go.'}
+                  <span>
+                    {verificationInfo(place, now).detail} Call ahead before you go.
+                  </span>
                 </p>
               )}
+              {place.windows.length === 0 && <p className="mb-2 text-sm text-muted">Days and times not published.</p>}
               <ul className="space-y-2">
                 {place.windows.map((w) => (
                   <li key={w.id} className={cn('flex items-baseline justify-between gap-3 rounded-tile px-3 py-2', status.window?.id === w.id && status.state === 'now' ? 'bg-success/10' : 'bg-cream')}>
@@ -208,12 +209,47 @@ function PlaceView({ place }: { place: Establishment }) {
               )}
             </>
           )}
-          {place.hhSourceNote && <p className="mt-3 text-xs text-muted">Source: {place.hhSourceNote}</p>}
+          {place.hhRestrictions.length > 0 && (
+            <ul className="mt-3 space-y-0.5 text-sm text-choc">
+              {place.hhRestrictions.map((r) => (
+                <li key={r}>• {r}</li>
+              ))}
+            </ul>
+          )}
+          {(place.hhSourceNote || place.hhSourceUrl) && (
+            <p className="mt-3 text-xs text-muted">
+              Source: {place.hhSourceNote ?? 'Venue website'}
+              {place.hhSourceUrl && (
+                <>
+                  {' · '}
+                  <a href={place.hhSourceUrl} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+                    view source
+                  </a>
+                </>
+              )}
+            </p>
+          )}
           <button type="button" onClick={() => requireAuth('report') && setReportOpen(true)} className="mt-3 text-sm font-semibold text-choc underline underline-offset-2">
             Report outdated info
           </button>
         </div>
       </section>
+
+      {place.businessHours && place.businessHours.length > 0 && (
+        <section aria-labelledby="open-title" className="mx-4 mt-4 rounded-card bg-white p-4 shadow-card">
+          <h2 id="open-title" className="text-lg font-extrabold text-choc">Opening hours</h2>
+          <p className="text-xs text-muted">When the venue is open — not the happy hour.</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {place.businessHours.map((w, i) => (
+              <li key={i} className="flex justify-between gap-3">
+                <span className="text-choc">{formatDays(w.days)}</span>
+                <span className="tabular text-choc">{formatRange(w.start, w.end)}</span>
+              </li>
+            ))}
+          </ul>
+          {place.attribution && <p className="mt-2 text-[11px] text-muted">Venue data: {place.attribution}</p>}
+        </section>
+      )}
 
       {/* Community breakdown */}
       <section className="mx-4 mt-4 rounded-card bg-white p-4 shadow-card" aria-labelledby="breakdown-title">

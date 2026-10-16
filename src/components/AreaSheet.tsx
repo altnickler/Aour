@@ -1,10 +1,12 @@
 import { LocateFixed, MapPin } from 'lucide-react'
 import { useLocationState } from '@/app/location'
+import { RADIUS_OPTIONS } from '@/core/discovery'
 import { Button, Chip, Sheet } from './ui'
+import { PlaceSearch } from './PlaceSearch'
 
-/** Choose market + area manually, or share (coarse) location for "near me". */
+/** Share (coarse) location for "near me", search any city/address, or pick a launch city. */
 export function AreaSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { markets, market, area, setMarket, setArea, origin, requestLocation, clearLocation, locating, locationError } = useLocationState()
+  const { markets, market, area, center, radiusMiles, setRadius, setMarket, choosePlace, setArea, origin, requestLocation, clearLocation, locating, locationError } = useLocationState()
   return (
     <Sheet open={open} onClose={onClose} title="Where are you headed?">
       <div className="space-y-5 pb-2">
@@ -15,8 +17,8 @@ export function AreaSheet({ open, onClose }: { open: boolean; onClose: () => voi
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-choc">{origin ? 'Using your location' : 'Use my location'}</p>
-              <p className="text-sm text-muted">Only used on this device to sort by distance. Never stored or shared.</p>
-              {locationError && <p className="mt-1 text-sm text-danger">{locationError}</p>}
+              <p className="text-sm text-muted">Rounded to about 1 km and used only on this device. Never stored or sent to Aour.</p>
+              {locationError && <p className="mt-1 text-sm text-danger" role="alert">{locationError}</p>}
             </div>
           </div>
           <div className="mt-3 flex gap-2">
@@ -32,12 +34,31 @@ export function AreaSheet({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
         </div>
 
-        {markets.length > 1 && (
+        <PlaceSearch
+          onPick={(r) => {
+            choosePlace(r)
+            onClose()
+          }}
+        />
+
+        <div>
+          <h3 className="mb-2 text-sm font-bold text-muted uppercase">Within</h3>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Search radius">
+            {RADIUS_OPTIONS.map((r) => (
+              <Chip key={r} selected={radiusMiles === r} onClick={() => setRadius(r)}>
+                {r} mi
+              </Chip>
+            ))}
+          </div>
+          {center && <p className="mt-2 text-xs text-muted">Currently: {center.kind === 'device' ? 'near you' : center.label}</p>}
+        </div>
+
+        {markets.length > 0 && (
           <div>
-            <h3 className="mb-2 text-sm font-bold text-muted uppercase">City</h3>
+            <h3 className="mb-2 text-sm font-bold text-muted uppercase">Launch cities</h3>
             <div className="flex flex-wrap gap-2">
               {markets.map((m) => (
-                <Chip key={m.id} selected={m.id === market?.id} onClick={() => setMarket(m.slug)}>
+                <Chip key={m.id} selected={center?.kind === 'market' && m.id === market?.id} onClick={() => setMarket(m.slug)}>
                   {m.name}
                 </Chip>
               ))}
@@ -45,9 +66,9 @@ export function AreaSheet({ open, onClose }: { open: boolean; onClose: () => voi
           </div>
         )}
 
-        {market && (
+        {market && market.areas.length > 0 && (
           <div>
-            <h3 className="mb-2 text-sm font-bold text-muted uppercase">{market.name}</h3>
+            <h3 className="mb-2 text-sm font-bold text-muted uppercase">Areas in {market.name}</h3>
             <div className="flex flex-wrap gap-2">
               <Chip selected={!area} onClick={() => setArea(null)}>
                 <MapPin className="size-3.5" /> Everywhere
@@ -58,7 +79,6 @@ export function AreaSheet({ open, onClose }: { open: boolean; onClose: () => voi
                 </Chip>
               ))}
             </div>
-            <p className="mt-3 text-xs text-muted">Aour is launching on Florida's Treasure Coast first. More cities soon.</p>
           </div>
         )}
         <Button block onClick={onClose}>

@@ -7,12 +7,16 @@
  */
 
 import { bayesianScore, buildRankings, type RatedVisit, type Weights } from './rating'
-import { happyHourStatus, runsAt, runsOnDay, zonedNow } from './schedule'
+import { happyHourStatus, runsAt, runsOnDay, weekendOffsets, windowsForDay, zonedNow } from './schedule'
 import { distanceMiles, freshness, type LatLng } from './listing'
 import type { Establishment, Visit } from './types'
 import type { PrimaryCategoryKey } from './categories'
 
-export type WhenFilter = 'any' | 'now' | 'today' | 'day'
+/** now = happening now · later = later today · tomorrow · weekend = this Sat/Sun · day = a chosen weekday */
+export type WhenFilter = 'any' | 'now' | 'later' | 'tomorrow' | 'weekend' | 'day'
+
+export const RADIUS_OPTIONS = [2, 5, 10, 25, 50] as const
+export const DEFAULT_RADIUS_MILES = 5
 
 export interface DiscoveryFilters {
   query: string
@@ -21,7 +25,6 @@ export interface DiscoveryFilters {
   day: number
   /** minutes since midnight; optional time-of-day for `day` */
   time: number | null
-  maxMiles: number | null
   minRating: number | null
   kinds: string[]
   tags: string[]
@@ -34,7 +37,6 @@ export const DEFAULT_FILTERS: DiscoveryFilters = {
   when: 'any',
   day: new Date().getDay(),
   time: null,
-  maxMiles: null,
   minRating: null,
   kinds: [],
   tags: [],
@@ -45,7 +47,6 @@ export const DEFAULT_FILTERS: DiscoveryFilters = {
 export function activeFilterCount(f: DiscoveryFilters): number {
   return (
     (f.when !== 'any' ? 1 : 0) +
-    (f.maxMiles !== null ? 1 : 0) +
     (f.minRating !== null ? 1 : 0) +
     (f.kinds.length ? 1 : 0) +
     (f.tags.length ? 1 : 0) +
@@ -56,11 +57,14 @@ export function activeFilterCount(f: DiscoveryFilters): number {
 
 export interface DiscoveryContext {
   now: Date
+  /** Where distances are measured from: the device (coarse), a searched place, or a market centre. */
   origin: LatLng | null
+  /** Search radius around `origin`; null = no limit. */
+  radiusMiles?: number | null
 }
 
 function normalize(s: string): string {
-  return s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  return s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
 }
 
 export function matchesQuery(e: Establishment, query: string): boolean {
@@ -76,6 +80,19 @@ export function hasTag(e: Establishment, tag: string): boolean {
   return e.amenities.includes(tag.replace(/-/g, '_'))
 }
 
+/**
+ * A listing with actual happy-hour facts. Venues without any (e.g. newly discovered places)
+ * are "candidates" and are shown separately, clearly labelled — never mixed into results.
+ */
+export function hasHappyHourInfo(e: Establishment): boolean {
+  return e.hhStatus !== 'none' && (e.windows.length > 0 || e.specials.length > 0)
+}
+
+/** Does happy hour run on the venue's local day `offset` days from now? */
+export function runsOnOffset(e: Establishment, now: Date, offset: number): boolean {
+  return windowsForDay(e.windows, e.exceptions, e.timezone, now, offset).length > 0
+}
+
 export function filterEstablishments(
   list: readonly Establishment[],
   f: DiscoveryFilters,
@@ -88,27 +105,49 @@ export function filterEstablishments(
     if (f.tags.length && !f.tags.every((t) => hasTag(e, t))) return false
     if (f.minRating !== null && (e.community.average ?? 0) < f.minRating) return false
     if (f.verifiedOnly && freshness(e.hhStatus, e.hhVerifiedAt, ctx.now) !== 'fresh') return false
-    if (f.maxMiles !== null && ctx.origin && distanceMiles(ctx.origin, e) > f.maxMiles) return false
+    if (ctx.radiusMiles != null && ctx.origin && distanceMiles(ctx.origin, e) > ctx.radiusMiles) return false
     if (f.when !== 'any') {
       // Only listings with actual schedule data can match a time filter.
       if (e.hhStatus === 'none' || e.windows.length === 0) return false
-      if (f.when === 'now' && happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now).state !== 'now') return false
-      if (f.when === 'today') {
-        const s = happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now)
-        if (s.state !== 'now' && s.state !== 'later_today') return false
-      }
-      if (f.when === 'day') {
-        if (f.time === null ? !runsOnDay(e.windows, f.day) : !runsAt(e.windows, f.day, f.time)) return false
+      switch (f.when) {
+        case 'now':
+          return happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now).state === 'now'
+        case 'later':
+          return happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now).state === 'later_today'
+        case 'tomorrow':
+          return runsOnOffset(e, ctx.now, 1)
+        case 'weekend':
+          return weekendOffsets(zonedNow(e.timezone, ctx.now).day).some((o) => runsOnOffset(e, ctx.now, o))
+        case 'day':
+          return f.time === null ? runsOnDay(e.windows, f.day) : runsAt(e.windows, f.day, f.time)
       }
     }
     return true
   })
 }
 
-export type DiscoverySort = 'recommended' | 'distance' | 'rating' | 'ending_soon' | 'name'
+/** recommended = "Best match" · rating = "Best overall" · distance = "Closest" */
+export type DiscoverySort = 'recommended' | 'distance' | 'rating' | 'drinks' | 'food' | 'value' | 'ending_soon' | 'name'
+
+export const SORT_LABEL: Record<DiscoverySort, string> = {
+  recommended: 'Best match',
+  distance: 'Closest',
+  rating: 'Best overall',
+  drinks: 'Best drinks',
+  food: 'Best food',
+  value: 'Best value',
+  ending_soon: 'Ending soon',
+  name: 'A–Z',
+}
 
 export function communityRank(e: Establishment): number {
   return bayesianScore(e.community.average, e.community.reviewers)
+}
+
+/** Bayesian-shrunk community score for one category; unrated places sort last. */
+export function categoryRank(e: Establishment, key: PrimaryCategoryKey): number {
+  const avg = e.community.categoryAverages[key]
+  return avg == null ? -1 : bayesianScore(avg, e.community.reviewers)
 }
 
 export function sortEstablishments(
@@ -123,7 +162,11 @@ export function sortEstablishments(
     case 'distance':
       return out.sort((a, b) => dist(a) - dist(b) || a.name.localeCompare(b.name))
     case 'rating':
-      return out.sort((a, b) => communityRank(b) - communityRank(a) || a.name.localeCompare(b.name))
+      return out.sort((a, b) => communityRank(b) - communityRank(a) || dist(a) - dist(b) || a.name.localeCompare(b.name))
+    case 'drinks':
+    case 'food':
+    case 'value':
+      return out.sort((a, b) => categoryRank(b, sort) - categoryRank(a, sort) || communityRank(b) - communityRank(a) || dist(a) - dist(b))
     case 'name':
       return out.sort((a, b) => a.name.localeCompare(b.name))
     case 'ending_soon': {
@@ -141,9 +184,9 @@ export function sortEstablishments(
 }
 
 /**
- * Transparent blend for the default "Recommended" order:
- * Bayesian community score, a bonus if happening now/soon, a small distance penalty,
- * a small freshness bonus, and — when the user has rated it — their own score.
+ * Transparent blend for the default "Best match" order:
+ * Bayesian community score, a bonus if happening now/soon, a distance penalty scaled to the
+ * search radius, a small trust bonus, and — when the user has rated it — their own score.
  */
 export function recommendScore(e: Establishment, ctx: DiscoveryContext, personal?: ReadonlyMap<string, number>): number {
   let score = communityRank(e)
@@ -152,8 +195,10 @@ export function recommendScore(e: Establishment, ctx: DiscoveryContext, personal
   const s = happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now)
   if (s.state === 'now') score += 0.6
   else if (s.state === 'later_today') score += 0.3
-  if (ctx.origin) score -= Math.min(1, distanceMiles(ctx.origin, e) / 15)
+  if (ctx.origin) score -= Math.min(1, distanceMiles(ctx.origin, e) / Math.max(5, ctx.radiusMiles ?? 15))
   if (freshness(e.hhStatus, e.hhVerifiedAt, ctx.now) === 'fresh') score += 0.15
+  else if (e.hhStatus === 'establishment_reported') score += 0.05
+  else if (e.hhStatus === 'outdated') score -= 0.3
   return score
 }
 

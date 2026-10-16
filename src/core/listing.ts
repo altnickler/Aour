@@ -2,7 +2,16 @@
  * Listing freshness, geography and small display helpers shared by every screen.
  */
 
-export type HappyHourVerification = 'verified' | 'unverified' | 'outdated' | 'none'
+/**
+ * Public verification states for happy-hour details (same set as hh_status in the database):
+ *  verified               confirmed by an Aour admin against a recorded source
+ *  establishment_reported published by the venue itself (its website, or the owner)
+ *  community_reported     users or open data (OpenStreetMap), not independently confirmed
+ *  unverified             "Needs verification": low confidence, conflicting, or unchecked
+ *  outdated               too old, or reported as changed
+ *  none                   no happy-hour information available
+ */
+export type HappyHourVerification = 'verified' | 'establishment_reported' | 'community_reported' | 'unverified' | 'outdated' | 'none'
 export type Freshness = 'fresh' | 'aging' | 'stale' | 'unverified'
 
 export const FRESH_DAYS = 90
@@ -31,18 +40,58 @@ export function freshness(status: HappyHourVerification, verifiedAt: string | nu
   return 'stale'
 }
 
+function ago(days: number | null): string {
+  if (days === null) return ''
+  return days === 0 ? 'today' : days === 1 ? 'yesterday' : days < 60 ? `${days} days ago` : `${Math.round(days / 30)} months ago`
+}
+
 export function freshnessLabel(f: Freshness, verifiedAt: string | null, now: Date = new Date()): string {
-  const days = daysSince(verifiedAt, now)
-  const ago = days === null ? '' : days === 0 ? 'today' : days === 1 ? 'yesterday' : days < 60 ? `${days} days ago` : `${Math.round(days / 30)} months ago`
+  const when = ago(daysSince(verifiedAt, now))
   switch (f) {
     case 'fresh':
-      return `Verified ${ago}`
+      return `Verified ${when}`
     case 'aging':
-      return `Verified ${ago} · may have changed`
+      return `Verified ${when} · may have changed`
     case 'stale':
-      return verifiedAt ? `Last verified ${ago} · likely outdated` : 'Reported outdated'
+      return verifiedAt ? `Last verified ${when} · likely outdated` : 'Reported outdated'
     default:
       return 'Not yet verified'
+  }
+}
+
+export interface VerificationInfo {
+  label: string
+  tone: 'success' | 'warn' | 'danger' | 'neutral' | 'info'
+  /** Longer explanation for the place page. */
+  detail: string
+}
+
+/** What a user should be told about where the happy-hour details came from and how current they are. */
+export function verificationInfo(
+  e: { hhStatus: HappyHourVerification; hhVerifiedAt: string | null; hhCheckedAt?: string | null },
+  now: Date = new Date(),
+): VerificationInfo {
+  const checked = daysSince(e.hhCheckedAt ?? null, now)
+  const checkedText = checked === null ? '' : ` Last checked ${ago(checked)}.`
+  switch (e.hhStatus) {
+    case 'verified': {
+      const f = freshness('verified', e.hhVerifiedAt, now)
+      return {
+        label: freshnessLabel(f, e.hhVerifiedAt, now),
+        tone: f === 'fresh' ? 'success' : f === 'aging' ? 'warn' : 'danger',
+        detail: 'Confirmed by the Aour team against a recorded source.' + (f !== 'fresh' ? ' It has been a while, so details may have changed.' : ''),
+      }
+    }
+    case 'establishment_reported':
+      return { label: 'Reported by venue', tone: 'info', detail: `Published by the venue itself (for example on its website). Not yet confirmed by Aour.${checkedText}` }
+    case 'community_reported':
+      return { label: 'Community reported', tone: 'neutral', detail: `Shared by the community or open map data. Not yet confirmed by the venue or Aour.${checkedText}` }
+    case 'outdated':
+      return { label: 'Outdated', tone: 'danger', detail: 'These details may no longer be accurate. Check with the venue before you go.' }
+    case 'none':
+      return { label: 'No happy-hour info', tone: 'neutral', detail: 'We have not found happy-hour information for this place yet.' }
+    default:
+      return { label: 'Needs verification', tone: 'warn', detail: `We found these details but have not been able to confirm them yet.${checkedText}` }
   }
 }
 

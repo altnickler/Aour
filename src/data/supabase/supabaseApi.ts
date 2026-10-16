@@ -19,7 +19,8 @@ import type {
   Visit,
 } from '@/core/types'
 import { EMPTY_COMMUNITY_STATS, sanitizeWeights, type CommunityStats } from '@/core/rating'
-import { ApiError, type AdminApi, type Api, type AuthUser, type EstablishmentInput, type ProfilePatch, type UserCard } from '../api'
+import { ApiError, type AdminApi, type Api, type AuthUser, type EstablishmentInput, type GeoResult, type ProfilePatch, type UserCard } from '../api'
+import type { LatLng } from '@/core/listing'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -88,6 +89,11 @@ function mapEstablishment(r: Row): Establishment {
     hhStatus: r.hh_status,
     hhVerifiedAt: r.hh_verified_at,
     hhSourceNote: r.hh_source_note,
+    hhCheckedAt: r.hh_last_confirmed_at ?? r.hh_verified_at ?? null,
+    hhSourceUrl: r.hh_source_url ?? null,
+    hhRestrictions: r.hh_restrictions ?? [],
+    businessHours: Array.isArray(r.business_hours) ? r.business_hours : null,
+    attribution: r.attribution ?? null,
     windows: (r.happy_hour_windows ?? [])
       .sort((a: Row, b: Row) => a.sort_order - b.sort_order)
       .map((w: Row) => ({ id: w.id, days: w.days, start: hhmm(w.start_time)!, end: hhmm(w.end_time)!, label: w.label, notes: w.notes })),
@@ -267,7 +273,7 @@ export class SupabaseApi implements Api {
   // Listings -----------------------------------------------------------------------
   async listMarkets(): Promise<Market[]> {
     const rows = check(await this.client.from('markets').select('*').order('name'))
-    return rows.map((m: Row) => ({ id: m.id, slug: m.slug, name: m.name, region: m.region, lat: m.lat, lng: m.lng, timezone: m.timezone, areas: m.areas }))
+    return rows.map((m: Row) => ({ id: m.id, slug: m.slug, name: m.name, region: m.region, lat: m.lat, lng: m.lng, timezone: m.timezone, areas: m.areas, radiusMiles: m.radius_miles == null ? undefined : Number(m.radius_miles) }))
   }
 
   async listEstablishments(marketId: string) {
@@ -282,6 +288,44 @@ export class SupabaseApi implements Api {
         .limit(1000),
     )
     return rows.map(mapEstablishment)
+  }
+
+  async nearbyEstablishments(center: LatLng, radiusMiles: number) {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+    const rows = check(
+      await this.client
+        .rpc('nearby_establishments', { p_lat: center.lat, p_lng: center.lng, p_radius_m: Math.round(radiusMiles * 1609.34), p_limit: 300 })
+        .select(EST_SELECT)
+        .eq('status', 'published')
+        .gte('schedule_exceptions.date', yesterday),
+    ) as Row[]
+    return rows.map(mapEstablishment)
+  }
+
+  async getEstablishmentsByIds(ids: string[]) {
+    const unique = [...new Set(ids)].filter((x) => /^[0-9a-f-]{36}$/.test(x))
+    const out: Establishment[] = []
+    for (let i = 0; i < unique.length; i += 100) {
+      const rows = check(await this.client.from('establishments').select(EST_SELECT).in('id', unique.slice(i, i + 100)))
+      out.push(...rows.map(mapEstablishment))
+    }
+    return out
+  }
+
+  async geocode(query: string) {
+    let res: Response
+    try {
+      res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } })
+    } catch {
+      throw new ApiError('Place search is unavailable. Check your connection.', 'network')
+    }
+    const body = (await res.json().catch(() => null)) as { results?: GeoResult[]; attribution?: string; error?: string } | null
+    if (!res.ok || !body?.results) throw new ApiError(body?.error ?? 'Place search is unavailable right now.', String(res.status))
+    return { results: body.results, attribution: body.attribution ?? null }
+  }
+
+  async requestCoverage(center: LatLng, label: string | null) {
+    await this.rpc('request_coverage', { p_lat: center.lat, p_lng: center.lng, p_label: label })
   }
 
   async getEstablishment(slugOrId: string) {

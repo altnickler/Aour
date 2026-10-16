@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Lock, MapPin, Share, UserCheck, UserPlus } from 'lucide-react'
 import { useAuth, useRequireAuth } from '@/app/auth'
-import { useLocationState } from '@/app/location'
 import { useFollow, useListingIndex, useProfile, useProfileCollections, useProfileFavorites, useProfileReviews, useRankings } from '@/data/hooks'
 import { buildRankings } from '@/core/rating'
 import { shareLink } from '@/lib/share'
@@ -25,8 +24,8 @@ export default function UserProfileScreen() {
   const reviews = useProfileReviews(visible ? p.id : undefined)
   const favorites = useProfileFavorites(visible ? p.id : undefined)
   const collections = useProfileCollections(visible ? p.id : undefined)
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const profileIds = useMemo(() => [...(reviews.data ?? []).map((r) => r.establishmentId), ...(favorites.data ?? [])], [reviews.data, favorites.data])
+  const { index } = useListingIndex(profileIds)
   const mine = useRankings()
   const [tab, setTab] = useState<'ranked' | 'recent' | 'lists'>('ranked')
 

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Lock } from 'lucide-react'
-import { useLocationState } from '@/app/location'
 import { useListingIndex, useMyVisits, useVisitScore } from '@/data/hooks'
 import { TAG_BY_KEY } from '@/core/categories'
 import { ScoreBadge } from '@/components/score'
@@ -11,8 +10,7 @@ import { Button, EmptyState, PageHeader, Skeleton } from '@/components/ui'
 /** Every rated visit, newest first, grouped by month. Tap to edit or delete. */
 export default function HistoryScreen() {
   const visits = useMyVisits()
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const { index } = useListingIndex()
   const score = useVisitScore()
   const navigate = useNavigate()
 

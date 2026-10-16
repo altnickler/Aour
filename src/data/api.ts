@@ -30,6 +30,15 @@ import type {
   VisitInput,
 } from '@/core/types'
 import type { HappyHourWindow, ScheduleException } from '@/core/schedule'
+import type { LatLng } from '@/core/listing'
+
+export interface GeoResult {
+  label: string
+  lat: number
+  lng: number
+  /** city, street, house, … */
+  kind: string
+}
 
 export interface AuthUser {
   id: string
@@ -122,7 +131,15 @@ export interface Api {
   listMarkets(): Promise<Market[]>
   /** All published listings in a market (a few hundred at most), with stats. */
   listEstablishments(marketId: string): Promise<Establishment[]>
+  /** Published listings within `radiusMiles` of a point (indexed geospatial query), any market. */
+  nearbyEstablishments(center: LatLng, radiusMiles: number): Promise<Establishment[]>
+  /** Resolve specific listings (e.g. ones a user rated or saved elsewhere). */
+  getEstablishmentsByIds(ids: string[]): Promise<Establishment[]>
   getEstablishment(slugOrId: string): Promise<Establishment | null>
+  /** City/address search. Only called when the user types; results are not stored. */
+  geocode(query: string): Promise<{ results: GeoResult[]; attribution: string | null }>
+  /** Anonymous "bring Aour here" signal for an area with no coverage (rounded to ~11 km). */
+  requestCoverage(center: LatLng, label: string | null): Promise<void>
   establishmentReviews(establishmentId: string, opts?: { followingOnly?: boolean; before?: string }): Promise<PublicReview[]>
 
   // Me -------------------------------------------------------------------------

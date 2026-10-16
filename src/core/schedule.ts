@@ -168,6 +168,26 @@ export function happyHourStatus(
   return { state: 'none', window: null }
 }
 
+/**
+ * The happy-hour windows that start on the venue's local day `offset` days from `at`
+ * (0 = today, 1 = tomorrow), honouring dated exceptions. Uses the venue's time zone.
+ */
+export function windowsForDay(
+  windows: readonly HappyHourWindow[],
+  exceptions: readonly ScheduleException[],
+  timeZone: string,
+  at: Date = new Date(),
+  offset = 0,
+): HappyHourWindow[] {
+  return occurrencesForDay(windows, exceptions, zonedNow(timeZone, at), offset).map((o) => o.window)
+}
+
+/** Day offsets (from the venue's today) covering "this weekend": the coming Saturday and Sunday. */
+export function weekendOffsets(today: number): number[] {
+  if (today === 0) return [0] // Sunday: the rest of today
+  return [6 - today, 7 - today]
+}
+
 /** Whether any window starts on the given weekday (ignores exceptions). */
 export function runsOnDay(windows: readonly HappyHourWindow[], day: number): boolean {
   return windows.some((w) => w.days.includes(day))

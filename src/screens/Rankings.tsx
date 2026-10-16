@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Lock, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAuth, useRequireAuth } from '@/app/auth'
 import { useListingIndex, useMyCollections, useCollectionMutations, useRankings, useSaved } from '@/data/hooks'
-import { useLocationState } from '@/app/location'
 import { RANKING_SORTS, sortRankings, formatScore, type RankingEntry, type RankingSort } from '@/core/rating'
 import { CATEGORY_BY_KEY } from '@/core/categories'
 import type { Establishment, SavedList } from '@/core/types'
@@ -72,8 +71,7 @@ export default function RankingsScreen() {
 }
 
 function Ranked() {
-  const { market } = useLocationState()
-  const { index, isLoading: listingsLoading } = useListingIndex(market?.id)
+  const { index, isLoading: listingsLoading } = useListingIndex()
   const { rankings, visits, isLoading } = useRankings()
   const [sort, setSort] = useState<RankingSort>('overall')
   const sorted = useMemo(() => sortRankings(rankings, sort), [rankings, sort])
@@ -173,8 +171,7 @@ function RankRow({ entry, place, sort }: { entry: RankingEntry; place: Establish
 }
 
 function SavedList({ list }: { list: SavedList }) {
-  const { market } = useLocationState()
-  const { index, isLoading } = useListingIndex(market?.id)
+  const { index, isLoading } = useListingIndex()
   const saved = useSaved()
   const { byPlace } = useRankings()
   const now = useNow()
@@ -215,8 +212,8 @@ function SavedList({ list }: { list: SavedList }) {
 
 function Collections() {
   const collections = useMyCollections()
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const collectionIds = useMemo(() => (collections.data ?? []).flatMap((c) => c.items.map((i) => i.establishmentId)), [collections.data])
+  const { index } = useListingIndex(collectionIds)
   const [editing, setEditing] = useState(false)
   if (collections.isLoading) return <Skeleton className="mx-4 mt-2 h-24" />
   return (

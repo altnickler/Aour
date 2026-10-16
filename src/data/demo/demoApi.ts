@@ -9,7 +9,7 @@
 import seed from '../demo-seed.json'
 import { communityStats, visitComposite, isValidScore, DEFAULT_WEIGHTS, validateWeights } from '@/core/rating'
 import { CATEGORY_BY_KEY, PRIMARY_CATEGORY_KEYS, TAG_BY_KEY } from '@/core/categories'
-import { validateUsername } from '@/core/listing'
+import { distanceMiles, validateUsername, type LatLng } from '@/core/listing'
 import type {
   AdminUser,
   Collection,
@@ -121,6 +121,11 @@ function initialState(): State {
     hhStatus: e.hhStatus as Establishment['hhStatus'],
     hhVerifiedAt: e.verifiedDaysAgo === null ? null : iso(e.verifiedDaysAgo * DAY),
     hhSourceNote: e.hhSourceNote,
+    hhCheckedAt: e.verifiedDaysAgo === null ? null : iso(e.verifiedDaysAgo * DAY),
+    hhSourceUrl: null,
+    hhRestrictions: [],
+    businessHours: null,
+    attribution: null,
     windows: e.windows.map((w) => ({ ...w })),
     exceptions: [],
     specials: e.specials.map((s) => ({ ...s, kind: s.kind as 'drink' | 'food' | 'other' })),
@@ -274,7 +279,9 @@ export class DemoApi implements Api {
       const p = this.user(v.userId)?.profile
       return !!p && p.contributeToCommunity && !p.suspended
     })
-    return { ...e, community: communityStats(contributing.map((v) => ({ userId: v.userId, scores: v.scores, tags: v.tags }))) }
+    // Demo states saved by older app versions lack the newer listing fields.
+    const defaults = { hhCheckedAt: e.hhVerifiedAt, hhSourceUrl: null, hhRestrictions: [], businessHours: null, attribution: null }
+    return { ...defaults, ...e, community: communityStats(contributing.map((v) => ({ userId: v.userId, scores: v.scores, tags: v.tags }))) }
   }
 
   private toReview(v: State['visits'][number]): PublicReview {
@@ -382,6 +389,31 @@ export class DemoApi implements Api {
   async listEstablishments(marketId: string) {
     await tick()
     return this.state.establishments.filter((e) => e.marketId === marketId && e.status === 'published').map((e) => this.withCommunity(e))
+  }
+
+  async nearbyEstablishments(center: LatLng, radiusMiles: number) {
+    await tick()
+    return this.state.establishments
+      .filter((e) => e.status === 'published' && distanceMiles(center, e) <= radiusMiles)
+      .map((e) => this.withCommunity(e))
+  }
+
+  async getEstablishmentsByIds(ids: string[]) {
+    await tick()
+    const want = new Set(ids)
+    return this.state.establishments.filter((e) => want.has(e.id) && e.status === 'published').map((e) => this.withCommunity(e))
+  }
+
+  /** Offline demo: only the demo market is searchable (there is no geocoder without a backend). */
+  async geocode(query: string) {
+    await tick()
+    const q = query.trim().toLowerCase()
+    const hit = [MARKET.name, MARKET.region, ...MARKET.areas].some((n) => n.toLowerCase().includes(q) || q.includes(n.toLowerCase()))
+    return { results: hit ? [{ label: `${MARKET.name}, ${MARKET.region}`, lat: MARKET.lat, lng: MARKET.lng, kind: 'city' }] : [], attribution: null }
+  }
+
+  async requestCoverage() {
+    await tick()
   }
 
   async getEstablishment(slugOrId: string) {

@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useQueries } from '@tanstack/react-query'
 import { Lock, Pencil, Share, Trash2, X } from 'lucide-react'
 import { useAuth } from '@/app/auth'
-import { useLocationState } from '@/app/location'
 import { useCollection, useCollectionMutations, useListingIndex, useRankings } from '@/data/hooks'
 import { api } from '@/data'
 import { shareLink } from '@/lib/share'
@@ -19,8 +18,8 @@ export default function CollectionScreen() {
   const { shareId = '' } = useParams()
   const collection = useCollection(shareId)
   const { user } = useAuth()
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const itemIds = useMemo(() => (collection.data?.items ?? []).map((i) => i.establishmentId), [collection.data])
+  const { index } = useListingIndex(itemIds)
   const { byPlace } = useRankings()
   const { remove, setItem } = useCollectionMutations()
   const toast = useToast()

@@ -2,7 +2,6 @@ import { Link, useNavigate } from 'react-router'
 import { Activity, CalendarDays, ChevronRight, FolderHeart, Heart, MapPin, Plus, Settings, Shield, Trophy, UserPlus } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useAuth } from '@/app/auth'
-import { useLocationState } from '@/app/location'
 import { useListingIndex, useProfile, useRankings, useSaved } from '@/data/hooks'
 import { PRIMARY_CATEGORIES } from '@/core/categories'
 import { meanScore, formatScore } from '@/core/rating'
@@ -58,8 +57,7 @@ function SignedIn({ isAdmin }: { isAdmin: boolean }) {
   const stats = useProfile(p.username)
   const { rankings, visits } = useRankings()
   const saved = useSaved()
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const { index } = useListingIndex()
   const top = rankings.slice(0, 3)
   const favorites = (saved.data ?? []).filter((s) => s.list === 'favorite').map((s) => index.get(s.establishmentId)).filter(Boolean)
 

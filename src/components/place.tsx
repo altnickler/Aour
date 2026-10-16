@@ -3,8 +3,8 @@ import { Link } from 'react-router'
 import { Bookmark, BookmarkCheck, Clock, Heart } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import type { Establishment, SavedList } from '@/core/types'
-import { happyHourStatus, statusLabel, formatWindow } from '@/core/schedule'
-import { KIND_EMOJI, KIND_LABEL, distanceMiles, formatMiles, freshness, freshnessLabel, priceLabel, type LatLng } from '@/core/listing'
+import { happyHourStatus, statusLabel, formatRange, windowsForDay } from '@/core/schedule'
+import { KIND_EMOJI, KIND_LABEL, distanceMiles, formatMiles, priceLabel, verificationInfo, type LatLng } from '@/core/listing'
 import { TAG_BY_KEY, AMENITY_BY_KEY } from '@/core/categories'
 import { ScoreBadge } from './score'
 import { Badge } from './ui'
@@ -41,7 +41,7 @@ export function PlaceThumb({ place, className, rounded = 'rounded-tile' }: { pla
 }
 
 export function HappyHourPill({ place, now = new Date(), className }: { place: Establishment; now?: Date; className?: string }) {
-  if (place.hhStatus === 'none') return <Badge className={className}>No happy hour listed</Badge>
+  if (place.hhStatus === 'none') return <Badge className={className}>No happy-hour info yet</Badge>
   const s = happyHourStatus(place.windows, place.exceptions, place.timezone, now)
   if (s.state === 'none') return null
   return (
@@ -58,16 +58,27 @@ export function HappyHourPill({ place, now = new Date(), className }: { place: E
   )
 }
 
-export function FreshnessBadge({ place, now = new Date() }: { place: Establishment; now?: Date }) {
+/** Where the happy-hour details come from: Verified / Reported by venue / Community reported / Needs verification / Outdated. */
+export function VerificationBadge({ place, now = new Date(), className }: { place: Establishment; now?: Date; className?: string }) {
   if (place.hhStatus === 'none') return null
-  const f = freshness(place.hhStatus, place.hhVerifiedAt, now)
-  const text = freshnessLabel(f, place.hhVerifiedAt, now)
+  const v = verificationInfo(place, now)
   return (
-    <Badge tone={f === 'fresh' ? 'success' : f === 'aging' ? 'warn' : f === 'stale' ? 'danger' : 'neutral'}>
-      {f === 'fresh' ? '✓ ' : ''}
-      {text}
+    <Badge tone={v.tone === 'info' ? 'butter' : v.tone} className={className}>
+      {place.hhStatus === 'verified' && v.tone === 'success' ? '✓ ' : ''}
+      {v.label}
     </Badge>
   )
+}
+
+/** Kept for existing call sites. */
+export const FreshnessBadge = VerificationBadge
+
+/** "Today 3–6pm, 9pm–close" in the venue's own time zone. */
+export function todaySchedule(place: Establishment, now: Date): string | null {
+  if (place.hhStatus === 'none' || place.windows.length === 0) return null
+  const today = windowsForDay(place.windows, place.exceptions, place.timezone, now, 0)
+  if (!today.length) return 'No happy hour today'
+  return `Today ${today.map((w) => formatRange(w.start, w.end)).join(', ')}`
 }
 
 export function DemoBadge({ place }: { place: Establishment }) {
@@ -114,15 +125,16 @@ export function SaveButton({ placeId, list = 'want_to_try', className, variant =
   )
 }
 
-/** One or two highlights for a card: top community tag, else top verified amenity, else a special. */
+/** One or two highlights for a card: real published specials first, then community tags / amenities. */
 function highlights(place: Establishment): string[] {
   const out: string[] = []
+  if (place.hhStatus !== 'none') {
+    for (const sp of place.specials.slice(0, 2)) out.push(`${sp.price ? `${sp.price} ` : ''}${sp.title}`)
+  }
   const tag = place.community.topTags[0]
-  if (tag && TAG_BY_KEY[tag.key]) out.push(`${TAG_BY_KEY[tag.key].emoji} ${TAG_BY_KEY[tag.key].label}`)
+  if (out.length < 2 && tag && TAG_BY_KEY[tag.key]) out.push(`${TAG_BY_KEY[tag.key].emoji} ${TAG_BY_KEY[tag.key].label}`)
   const amenity = place.amenities.find((a) => ['waterfront', 'rooftop', 'outdoor_seating', 'live_music'].includes(a))
-  if (amenity && out.length < 2 && !out[0]?.toLowerCase().includes(AMENITY_BY_KEY[amenity].toLowerCase())) out.push(AMENITY_BY_KEY[amenity])
-  const special = place.specials[0]
-  if (out.length < 2 && special && place.hhStatus !== 'none') out.push(`${special.price ? `${special.price} ` : ''}${special.title}`)
+  if (amenity && out.length < 2 && !out.some((x) => x.toLowerCase().includes(AMENITY_BY_KEY[amenity].toLowerCase()))) out.push(AMENITY_BY_KEY[amenity])
   return out.slice(0, 2)
 }
 
@@ -141,7 +153,7 @@ export const PlaceCard = memo(function PlaceCard({
   className?: string
 }) {
   const hl = highlights(place)
-  const firstWindow = place.windows[0]
+  const today = todaySchedule(place, now ?? new Date())
   return (
     <Link to={`/place/${place.slug}`} className={cn('press group block overflow-hidden rounded-card bg-white shadow-card', className)}>
       <div className="relative">
@@ -159,13 +171,15 @@ export const PlaceCard = memo(function PlaceCard({
           <p className="mt-0.5 truncate text-sm text-muted">
             {[place.neighborhood ?? place.city, KIND_LABEL[place.kind], priceLabel(place.priceLevel), origin ? formatMiles(distanceMiles(origin, place)) : null].filter(Boolean).join(' · ')}
           </p>
-          {firstWindow && place.hhStatus !== 'none' && (
-            <p className="mt-1.5 flex items-center gap-1 truncate text-sm font-semibold text-choc">
+          {today && (
+            <p className={cn('mt-1.5 flex items-center gap-1 truncate text-sm font-semibold', today.startsWith('No ') ? 'text-muted' : 'text-choc')}>
               <Clock className="size-3.5 shrink-0 text-gold-deep" aria-hidden />
-              {formatWindow(firstWindow)}
-              {place.windows.length > 1 && <span className="font-normal text-muted"> +{place.windows.length - 1}</span>}
+              {today}
             </p>
           )}
+          <div className="mt-1.5">
+            <VerificationBadge place={place} now={now} />
+          </div>
           {hl.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {hl.map((h) => (

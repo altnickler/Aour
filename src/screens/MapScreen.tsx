@@ -7,7 +7,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { ChevronLeft, List, LocateFixed, SlidersHorizontal } from 'lucide-react'
 import { useDiscovery } from '@/app/useDiscovery'
 import { useFilterState } from '@/app/filters'
-import { activeFilterCount, filterEstablishments } from '@/core/discovery'
+import { activeFilterCount, filterEstablishments, hasHappyHourInfo } from '@/core/discovery'
 import { happyHourStatus } from '@/core/schedule'
 import { formatScore } from '@/core/rating'
 import { config } from '@/lib/config'
@@ -19,8 +19,9 @@ import type { Establishment } from '@/core/types'
 setWorkerUrl(workerUrl)
 
 export default function MapScreen() {
-  const { listings, ctx, market, now, origin, requestLocation, locating } = useDiscovery()
-  const deviceOrigin = origin
+  const { listings, ctx, center, radiusMiles, now, requestLocation, locating } = useDiscovery()
+  const origin = center?.point ?? null
+  const hasCenter = !!center
   const [{ filters, sort }, setState] = useFilterState()
   const [selected, setSelected] = useState<Establishment | null>(null)
   const [failed, setFailed] = useState(() => !supportsWebGL())
@@ -28,20 +29,27 @@ export default function MapScreen() {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibre | null>(null)
   const markers = useRef<Marker[]>([])
+  const mapCenterRef = useRef(origin)
   const navigate = useNavigate()
+  // Runs before the map-creation effect below (effects run in declaration order).
+  useEffect(() => {
+    mapCenterRef.current = origin
+  })
 
-  const results = useMemo(() => filterEstablishments(listings.data ?? [], filters, ctx), [listings.data, filters, ctx])
+  // The map shows places with happy-hour details; venues without any are listed on Discover only.
+  const results = useMemo(() => filterEstablishments((listings.data ?? []).filter(hasHappyHourInfo), filters, ctx), [listings.data, filters, ctx])
 
   // Create the map once.
   useEffect(() => {
-    if (!container.current || !market || failed) return
+    if (!container.current || !hasCenter || failed) return
+    const start = mapCenterRef.current!
     let map: MapLibre
     try {
       map = new MapLibre({
         container: container.current,
         style: config.mapStyleUrl,
-        center: [market.lng, market.lat],
-        zoom: 11,
+        center: [start.lng, start.lat],
+        zoom: 12,
         attributionControl: { compact: true },
         dragRotate: false,
         pitchWithRotate: false,
@@ -62,7 +70,7 @@ export default function MapScreen() {
       map.remove()
       mapRef.current = null
     }
-  }, [market, failed])
+  }, [hasCenter, failed])
 
   // Sync markers with filtered results.
   useEffect(() => {
@@ -90,9 +98,10 @@ export default function MapScreen() {
     }
   }, [results, now])
 
+  // Follow the search centre (device location, searched place or market).
   useEffect(() => {
-    if (deviceOrigin && mapRef.current) mapRef.current.easeTo({ center: [deviceOrigin.lng, deviceOrigin.lat], zoom: 13 })
-  }, [deviceOrigin])
+    if (origin && mapRef.current) mapRef.current.easeTo({ center: [origin.lng, origin.lat], zoom: radiusMiles <= 2 ? 14 : radiusMiles <= 5 ? 12.5 : radiusMiles <= 10 ? 11.5 : 10 })
+  }, [origin?.lat, origin?.lng, radiusMiles]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const count = activeFilterCount(filters)
 
@@ -123,7 +132,9 @@ export default function MapScreen() {
               [
                 ['any', 'All'],
                 ['now', 'Now'],
-                ['today', 'Today'],
+                ['later', 'Later today'],
+                ['tomorrow', 'Tomorrow'],
+                ['weekend', 'Weekend'],
               ] as const
             ).map(([k, label]) => (
               <Chip key={k} selected={filters.when === k} onClick={() => setState({ filters: { ...filters, when: k } })} className="shadow-press">
@@ -138,7 +149,7 @@ export default function MapScreen() {
       </div>
 
       <div className="absolute right-3 bottom-4 z-10 flex flex-col gap-2" style={{ bottom: selected ? '11rem' : '1rem' }}>
-        <IconButton label="Center on my location" variant="surface" onClick={requestLocation} aria-busy={locating}>
+        <IconButton label="Use my location" variant="surface" onClick={requestLocation} aria-busy={locating}>
           <LocateFixed className="size-5" />
         </IconButton>
         <IconButton label="Show as list" variant="surface" onClick={() => navigate('/search')}>
@@ -158,7 +169,7 @@ export default function MapScreen() {
       )}
       {!failed && !listings.isLoading && results.length === 0 && (
         <div className="absolute inset-x-6 top-1/3 z-10 rounded-card bg-white/95 p-4 text-center shadow-float">
-          <p className="font-bold text-choc">No happy hours match these filters</p>
+          <p className="font-bold text-choc">No happy hours within {radiusMiles} mi match these filters</p>
         </div>
       )}
       <FiltersSheet open={open} onClose={() => setOpen(false)} filters={filters} sort={sort} onApply={(f, s) => setState({ filters: f, sort: s })} />

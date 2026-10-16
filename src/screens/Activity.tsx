@@ -1,7 +1,7 @@
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { FolderHeart, Heart } from 'lucide-react'
 import { useAuth } from '@/app/auth'
-import { useLocationState } from '@/app/location'
 import { useFeed, useFollowing, useListingIndex } from '@/data/hooks'
 import { ReviewCard, relativeDate } from '@/components/review'
 import { PlaceThumb } from '@/components/place'
@@ -12,8 +12,11 @@ export default function ActivityScreen() {
   const { user, loading } = useAuth()
   const feed = useFeed()
   const following = useFollowing()
-  const { market } = useLocationState()
-  const { index } = useListingIndex(market?.id)
+  const feedIds = useMemo(
+    () => (feed.data ?? []).flatMap((i) => (i.kind === 'visit' ? [i.review.establishmentId] : i.kind === 'favorite' ? [i.establishmentId] : [])),
+    [feed.data],
+  )
+  const { index } = useListingIndex(feedIds)
   const navigate = useNavigate()
 
   if (!loading && !user) {

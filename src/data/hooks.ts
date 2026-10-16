@@ -4,15 +4,20 @@
  */
 
 import { useMemo } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type CollectionInput, type ProfilePatch } from './index'
 import { useAuth } from '@/app/auth'
 import { buildRankings, visitComposite, type RankingEntry } from '@/core/rating'
 import type { Establishment, Preferences, SavedList, SavedPlace, Visit, VisitInput } from '@/core/types'
+import type { LatLng } from '@/core/listing'
 
 export const keys = {
   markets: ['markets'] as const,
   listings: (marketId: string) => ['listings', marketId] as const,
+  // Rounded to ~1 km so small movements reuse the cache (and nothing precise ends up in keys).
+  nearby: (c: LatLng, radius: number) => ['nearby', c.lat.toFixed(2), c.lng.toFixed(2), radius] as const,
+  byIds: (ids: string[]) => ['places-by-id', ids.join(',')] as const,
+  geocode: (q: string) => ['geocode', q] as const,
   place: (slug: string) => ['place', slug] as const,
   reviews: (id: string, following: boolean) => ['reviews', id, following] as const,
   me: (uid: string | null) => ['me', uid] as const,
@@ -46,11 +51,65 @@ export function useListings(marketId: string | undefined) {
   })
 }
 
-/** Index of the current market's listings by id. */
-export function useListingIndex(marketId: string | undefined) {
-  const q = useListings(marketId)
+/** Listings within a radius of a point — the main discovery query (any city, not just launch markets). */
+export function useNearby(center: LatLng | null, radiusMiles: number) {
+  return useQuery({
+    queryKey: center ? keys.nearby(center, radiusMiles) : ['nearby', 'none'],
+    queryFn: () => api.nearbyEstablishments({ lat: Number(center!.lat.toFixed(2)), lng: Number(center!.lng.toFixed(2)) }, radiusMiles),
+    enabled: !!center,
+    staleTime: FIVE_MIN,
+    placeholderData: keepPreviousData,
+  })
+}
+
+function cachedListings(qc: ReturnType<typeof useQueryClient>): Establishment[] {
+  const out: Establishment[] = []
+  for (const prefix of ['listings', 'nearby', 'places-by-id']) {
+    for (const [, list] of qc.getQueriesData<Establishment[]>({ queryKey: [prefix] })) if (Array.isArray(list)) out.push(...list)
+  }
+  return out
+}
+
+/**
+ * Listings by id for everything the user has rated or saved, plus `extraIds` (feed items,
+ * collection entries …), wherever those places are — not only the current area.
+ */
+export function useListingIndex(extraIds: readonly string[] = []) {
+  const qc = useQueryClient()
+  const visits = useMyVisits()
+  const saved = useSaved()
+  const ids = useMemo(
+    () => [...new Set([...(visits.data ?? []).map((v) => v.establishmentId), ...(saved.data ?? []).map((x) => x.establishmentId), ...extraIds])].sort(),
+    [visits.data, saved.data, extraIds],
+  )
+  const q = useQuery({
+    queryKey: keys.byIds(ids),
+    queryFn: () => api.getEstablishmentsByIds(ids),
+    enabled: ids.length > 0,
+    staleTime: FIVE_MIN,
+    placeholderData: () => {
+      const want = new Set(ids)
+      const hits = cachedListings(qc).filter((e) => want.has(e.id))
+      return hits.length ? [...new Map(hits.map((e) => [e.id, e])).values()] : undefined
+    },
+  })
   const index = useMemo(() => new Map((q.data ?? []).map((e) => [e.id, e])), [q.data])
-  return { ...q, index }
+  return { ...q, isLoading: q.isLoading || visits.isLoading, index }
+}
+
+export function useGeocode(query: string) {
+  const q = query.trim().replace(/\s+/g, ' ').toLowerCase()
+  return useQuery({
+    queryKey: keys.geocode(q),
+    queryFn: () => api.geocode(q),
+    enabled: q.length >= 3,
+    staleTime: 60 * 60_000,
+    retry: false,
+  })
+}
+
+export function useRequestCoverage() {
+  return useMutation({ mutationFn: ({ center, label }: { center: LatLng; label: string | null }) => api.requestCoverage(center, label) })
 }
 
 export function usePlace(slug: string) {
@@ -61,11 +120,7 @@ export function usePlace(slug: string) {
     staleTime: FIVE_MIN,
     // Instant render from the cached market list when available.
     placeholderData: () => {
-      for (const [, list] of qc.getQueriesData<Establishment[]>({ queryKey: ['listings'] })) {
-        const hit = list?.find((e) => e.slug === slug || e.id === slug)
-        if (hit) return hit
-      }
-      return undefined
+      return cachedListings(qc).find((e) => e.slug === slug || e.id === slug)
     },
   })
 }
@@ -138,6 +193,8 @@ export function useSaveVisit() {
     onSuccess: (_id, input) => {
       void qc.invalidateQueries({ queryKey: keys.visits(user?.id ?? null) })
       void qc.invalidateQueries({ queryKey: ['listings'] })
+      void qc.invalidateQueries({ queryKey: ['nearby'] })
+      void qc.invalidateQueries({ queryKey: ['places-by-id'] })
       void qc.invalidateQueries({ queryKey: ['place'] })
       void qc.invalidateQueries({ queryKey: ['reviews', input.establishmentId] })
     },
@@ -160,6 +217,8 @@ export function useDeleteVisit() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.visits(user?.id ?? null) })
       void qc.invalidateQueries({ queryKey: ['listings'] })
+      void qc.invalidateQueries({ queryKey: ['nearby'] })
+      void qc.invalidateQueries({ queryKey: ['places-by-id'] })
       void qc.invalidateQueries({ queryKey: ['place'] })
       void qc.invalidateQueries({ queryKey: ['reviews'] })
     },

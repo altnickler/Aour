@@ -19,6 +19,8 @@ export interface Market {
   timezone: string
   /** Neighbourhoods/towns in the market, for manual selection. */
   areas: string[]
+  /** Coverage radius around the centre. */
+  radiusMiles?: number
 }
 
 export interface Special {
@@ -62,6 +64,16 @@ export interface Establishment {
   hhVerifiedAt: string | null
   /** Public, human-readable source summary, e.g. "Confirmed by phone with manager". */
   hhSourceNote: string | null
+  /** When the source last confirmed the current details (automated re-checks included). */
+  hhCheckedAt: string | null
+  /** Where the details were published (the venue's own page), when known. */
+  hhSourceUrl: string | null
+  /** e.g. "Bar area only", "Not on holidays" — exactly as the source states. */
+  hhRestrictions: string[]
+  /** Business opening hours (NOT happy hour), when a licensed source provides them. */
+  businessHours: Omit<HappyHourWindow, 'id'>[] | null
+  /** Required credit line for imported venue data, e.g. "Overture Maps Foundation". */
+  attribution: string | null
   windows: HappyHourWindow[]
   exceptions: ScheduleException[]
   specials: Special[]
