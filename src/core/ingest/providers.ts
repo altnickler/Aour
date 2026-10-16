@@ -43,6 +43,45 @@ export function storageAllowed(provider: ProviderId): boolean {
 // ---------------------------------------------------------------------------
 // Category → kind. Only venues that plausibly run a happy hour are kept.
 // ---------------------------------------------------------------------------
+/**
+ * Overture classification from the two fields Overture itself curates — basic_category (coarse)
+ * and the primary category (most specific) — matched by EXACT name. Alternate categories are
+ * noisy (an insurance agency can list "pub"), so they never qualify a place on their own.
+ * Category names come from the live release (Stuart box, 2026-10; see scripts/maintenance.ts).
+ */
+const OVERTURE_BAR_KIND: Record<string, EstablishmentKind> = {
+  bar: 'bar', pub: 'bar', irish_pub: 'bar', dive_bar: 'bar', beach_bar: 'bar', tavern: 'bar', saloon: 'bar', night_club: 'bar',
+  nightclub: 'bar', dance_club: 'bar', karaoke: 'bar', piano_bar: 'bar', gay_bar: 'bar', bar_and_grill_restaurant: 'bar',
+  gastropub: 'bar', izakaya: 'bar', sake_bar: 'bar',
+  sports_bar: 'sports_bar',
+  cocktail_bar: 'cocktail_lounge', lounge: 'cocktail_lounge', hotel_bar: 'cocktail_lounge', speakeasy: 'cocktail_lounge', rooftop_bar: 'cocktail_lounge',
+  wine_bar: 'wine_bar', winery: 'wine_bar', wine_tasting_room: 'wine_bar',
+  brewery: 'brewery', brewpub: 'brewery', beer_bar: 'brewery', beer_garden: 'brewery', taproom: 'brewery', distillery: 'brewery',
+  tiki_bar: 'tiki_bar',
+  oyster_bar: 'raw_bar', raw_bar: 'raw_bar',
+}
+/** Restaurant styles where a happy hour is plausible are kept; quick-service formats are not. */
+const OVERTURE_NOT_RESTAURANT = new Set([
+  'fast_food_restaurant', 'breakfast_and_brunch_restaurant', 'chicken_restaurant', 'food_court', 'cafeteria', 'hot_dog_restaurant',
+  'donut_shop', 'bagel_shop', 'sandwich_shop', 'ice_cream_shop', 'dessert_shop', 'bakery', 'delicatessen', 'smoothie_juice_bar',
+  'juice_bar', 'coffee_shop', 'cafe', 'tea_room', 'bubble_tea', 'food_truck_stand', 'acai_bowls', 'frozen_yogurt_shop',
+])
+const OVERTURE_RESTAURANT_EXACT = new Set(['restaurant', 'steakhouse', 'bistro', 'brasserie', 'tapas_bar', 'seafood_market_restaurant'])
+
+export function kindFromOverture(basic: string | null | undefined, primary: string | null | undefined, alternates: string[] = []): EstablishmentKind | null {
+  const b = (basic ?? '').toLowerCase()
+  const p = (primary ?? '').toLowerCase()
+  if (OVERTURE_NOT_RESTAURANT.has(p) || OVERTURE_NOT_RESTAURANT.has(b)) return null
+  if (OVERTURE_BAR_KIND[p]) return OVERTURE_BAR_KIND[p]
+  if (b === 'bar' || b === 'pub' || b === 'lounge' || b === 'night_club') return OVERTURE_BAR_KIND[b] ?? 'bar'
+  if (['brewery', 'winery', 'distillery'].includes(b)) return OVERTURE_BAR_KIND[b]
+  // Live-music venues qualify only when Overture also lists them as a bar or pub.
+  if (p === 'music_venue' && alternates.some((a) => a === 'bar' || a === 'pub')) return 'bar'
+  if (b === 'restaurant' && p !== 'fast_food_restaurant') return 'restaurant'
+  if (OVERTURE_RESTAURANT_EXACT.has(p) || (p.endsWith('_restaurant') && !OVERTURE_NOT_RESTAURANT.has(p))) return 'restaurant'
+  return null
+}
+
 export function kindFromCategories(cats: string[]): EstablishmentKind | null {
   // Root nodes like Overture's "food_and_drink" say nothing about the venue type.
   const c = cats.filter((x) => !/^(food_and_drink|eat_and_drink)$/i.test(x)).join(' ').toLowerCase()
@@ -145,6 +184,8 @@ export interface OvertureRow {
   id: string
   name: string | null
   basic_category?: string | null
+  /** Most specific category (taxonomy.primary or categories.primary). */
+  primary_category?: string | null
   /** taxonomy.hierarchy ++ taxonomy.alternates */
   categories?: string[] | null
   lat: number
@@ -163,7 +204,8 @@ export function overtureToCandidate(r: OvertureRow, minConfidence = 0.6): Candid
   const name = clean(r.name)
   if (!name || (r.confidence ?? 1) < minConfidence) return null
   const cats = [r.basic_category ?? '', ...(r.categories ?? [])].filter(Boolean)
-  const kind = kindFromCategories(cats)
+  const primary = r.primary_category ?? r.categories?.at(-1) ?? null
+  const kind = kindFromOverture(r.basic_category, primary, r.categories ?? [])
   if (!kind) return null
   return {
     provider: 'overture',

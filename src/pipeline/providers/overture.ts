@@ -15,8 +15,8 @@ import type { PlaceSource } from '../discover'
 
 export const OVERTURE_BUCKET = 's3://overturemaps-us-west-2/release'
 
-/** Pre-filter in SQL so we transfer only plausible happy-hour venues; kindFromCategories decides. */
-const CATEGORY_RE = 'bar|pub|brew|taproom|beer|wine|winery|cocktail|lounge|tavern|saloon|night_?club|restaurant|grill|bistro|gastropub|tapas|oyster|seafood|steak|izakaya|tiki'
+/** Pre-filter on Overture's own basic/primary categories; kindFromOverture() makes the exact decision. */
+const CATEGORY_RE = 'bar|pub|brew|taproom|beer|wine|winery|distill|cocktail|lounge|tavern|saloon|night_?club|restaurant|steakhouse|bistro|brasserie|gastropub|tapas|izakaya|music_venue'
 
 /** Column name → DuckDB type, from DESCRIBE on the release being read. */
 export type OvertureColumns = Map<string, string>
@@ -37,11 +37,13 @@ export function overtureSql(cols: OvertureColumns): string {
   const basic = cols.has('basic_category') ? 'basic_category' : 'NULL::VARCHAR'
   const status = cols.has('operating_status') ? 'operating_status' : 'NULL::VARCHAR'
   const confidence = cols.has('confidence') ? 'confidence' : '1.0'
+  const primary = primaryCategoryExpr(cols)
   return `
 SELECT
   id,
   names.primary AS name,
   ${basic} AS basic_category,
+  ${primary} AS primary_category,
   list_filter(${categories}, x -> x IS NOT NULL) AS categories,
   (bbox.ymin + bbox.ymax) / 2 AS lat,
   (bbox.xmin + bbox.xmax) / 2 AS lng,
@@ -57,7 +59,7 @@ FROM read_parquet($path, hive_partitioning = true)
 WHERE bbox.xmin BETWEEN $west AND $east
   AND bbox.ymin BETWEEN $south AND $north
   AND coalesce(${confidence}, 0) >= 0.5
-  AND regexp_matches(lower(coalesce(${basic}, '') || ' ' || array_to_string(${categories}, ' ')), '${CATEGORY_RE}')`
+  AND regexp_matches(lower(coalesce(${basic}, '') || ' ' || coalesce(${primary}, '')), '${CATEGORY_RE}')`
 }
 
 export interface DuckConnection {
@@ -153,6 +155,7 @@ function toRow(r: Record<string, unknown>): OvertureRow {
     id: String(r.id),
     name: s(r.name),
     basic_category: s(r.basic_category),
+    primary_category: s(r.primary_category),
     categories: Array.isArray(r.categories) ? r.categories.filter((x): x is string => typeof x === 'string') : [],
     lat: Number(r.lat),
     lng: Number(r.lng),

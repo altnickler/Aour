@@ -8,7 +8,7 @@ import { assess, decideApply, recencyFactor, reliability } from '@/core/ingest/c
 import { findBestMatch, nameSimilarity, normalizePhone, websiteDomain } from '@/core/ingest/match'
 import { isAllowed, parseRobots, robotsFromResponse } from '@/core/ingest/robots'
 import { canSpend, isCrawlableWebsite, isStale, nextCheckAt, politeDelayMs } from '@/core/ingest/refresh'
-import { bboxAround, fsqToCandidate, kindFromCategories, osmToCandidate, overpassQuery, overtureToCandidate, storageAllowed, type OsmElement } from '@/core/ingest/providers'
+import { bboxAround, fsqToCandidate, kindFromCategories, kindFromOverture, osmToCandidate, overpassQuery, overtureToCandidate, storageAllowed, type OsmElement } from '@/core/ingest/providers'
 import type { HappyHourFinding } from '@/core/ingest/types'
 import { happyHourStatus } from '@/core/schedule'
 
@@ -337,6 +337,34 @@ describe('provider adapters', () => {
     expect(storageAllowed('foursquare')).toBe(false)
     expect(storageAllowed('overture')).toBe(true)
     expect(fsqToCandidate({ fsq_place_id: 'f1', name: 'Fixture Brewpub', latitude: 1, longitude: 2, categories: [{ name: 'Brewery' }] })!.kind).toBe('brewery')
+  })
+
+  it('Overture classification uses exact basic/primary categories from the live release', () => {
+    // Kept: real categories observed around Stuart, FL.
+    expect(kindFromOverture('bar', 'bar')).toBe('bar')
+    expect(kindFromOverture('bar', 'sports_bar')).toBe('sports_bar')
+    expect(kindFromOverture('lounge', 'lounge')).toBe('cocktail_lounge')
+    expect(kindFromOverture('restaurant', 'seafood_restaurant')).toBe('restaurant')
+    expect(kindFromOverture('restaurant', 'bar_and_grill_restaurant')).toBe('bar')
+    expect(kindFromOverture('restaurant', 'steakhouse')).toBe('restaurant')
+    expect(kindFromOverture('music_venue', 'music_venue', ['bar'])).toBe('bar')
+    // Dropped: everything that slipped through substring matching before.
+    for (const [b, p, alt] of [
+      ['financial_service', 'insurance_agency', ['pub']],
+      ['specialized_health_care', 'podiatry', []],
+      ['food_and_beverage_store', 'liquor_store', ['wine']],
+      ['casual_eatery', 'sandwich_shop', []],
+      ['smoothie_juice_bar', 'smoothie_juice_bar', []],
+      ['fast_food_restaurant', 'fast_food_restaurant', []],
+      ['coffee_shop', 'coffee_shop', []],
+      ['cafe', 'cafe', []],
+      ['casual_eatery', 'ice_cream_shop', []],
+      ['restaurant', 'breakfast_and_brunch_restaurant', []],
+      ['music_venue', 'music_venue', []],
+      [null, null, ['bar']],
+    ] as [string | null, string | null, string[]][]) {
+      expect(kindFromOverture(b, p, alt), `${b}/${p}`).toBeNull()
+    }
   })
 
   it('category filter keeps happy-hour venue types only', () => {
