@@ -2,7 +2,8 @@ name: Discovery
 
 # Market discovery from Overture Maps (DuckDB reads only each market's bounding box from the
 # public GeoParquet release). Runs daily; only markets whose next_discovery_at is due do work
-# (weekly per market), so most runs finish in seconds. Enrichment runs in the Worker cron.
+# (weekly per market), so most runs finish in seconds. The daily run then checks due venue websites
+# (up to 160); the Worker cron also checks a couple every 15 minutes.
 on:
   schedule:
     - cron: '17 7 * * *'
@@ -20,7 +21,7 @@ jobs:
   run:
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # Public project URL: from this variable if set, else read from the live site's /version.json.
       SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
@@ -39,6 +40,9 @@ jobs:
       - name: Reclassify imported listings (archives untouched non-venues; reversible)
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' && (github.event.inputs.mode || 'discover') == 'discover' }}
         run: npx tsx scripts/maintenance.ts reclassify --apply
+      - name: Website check (daily; the Worker cron only handles a few venues per run)
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' && github.event_name == 'schedule' }}
+        run: npm run pipeline -- enrich
       - name: Not configured
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
         run: echo "::warning::SUPABASE_SERVICE_ROLE_KEY is not set for the production environment; discovery skipped (see DEPLOYMENT.md)."

@@ -38,6 +38,8 @@ export interface Env {
   PIPELINE_ENABLED?: string
   /** Comma list of discovery sources the Worker may run: "osm", "foursquare". Overture runs in GitHub Actions. */
   WORKER_DISCOVERY?: string
+  /** Jobs the Cron Trigger claims per run (default 2). */
+  WORKER_JOBS_PER_TICK?: string
   GEOCODE_LIMITER?: RateLimit
 }
 
@@ -51,7 +53,7 @@ function pipelineConfigured(env: Env): boolean {
 /** Global fetch wrapped so it is never invoked with a foreign `this` (workerd: "Illegal invocation"). */
 const webFetch: typeof fetch = (input, init) => fetch(input, init)
 
-function tick(env: Env, worker: string, limit: number) {
+function tick(env: Env, worker: string, limit: number, concurrency = 3) {
   const rpc = supabaseRpc(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!)
   const store = createStore(rpc)
   const wanted = (env.WORKER_DISCOVERY ?? '').split(',').map((s) => s.trim())
@@ -61,7 +63,7 @@ function tick(env: Env, worker: string, limit: number) {
   const kinds: Job['kind'][] = sources.length ? ['enrich_establishment', 'discover_market'] : ['enrich_establishment']
   const llm = env.ANTHROPIC_API_KEY ? createLlmExtractor({ client: anthropicClient(env.ANTHROPIC_API_KEY), store, model: env.ANTHROPIC_MODEL }) : null
   return runPipelineTick({
-    rpc, fetch: webFetch, worker, kinds, sources, llm, limit, concurrency: 3,
+    rpc, fetch: webFetch, worker, kinds, sources, llm, limit, concurrency,
     log: (msg, data) => console.log(JSON.stringify({ msg, data })),
   })
 }
@@ -159,12 +161,17 @@ export default {
     return env.ASSETS.fetch(req)
   },
 
-  async scheduled(_controller: unknown, env: Env, ctx: Ctx): Promise<void> {
+  async scheduled(_controller: unknown, env: Env): Promise<void> {
     if (!pipelineConfigured(env) || env.PIPELINE_ENABLED === 'false') return
-    ctx.waitUntil(
-      tick(env, `cron-${crypto.randomUUID().slice(0, 8)}`, 6)
-        .then((r) => console.log(JSON.stringify({ msg: 'tick', claimed: r.claimed, succeeded: r.succeeded, failed: r.failed, queued: r.queued })))
-        .catch((e) => console.error('tick failed', e)),
-    )
+    // Awaited, not ctx.waitUntil: background work is cut off ~30 s after the handler returns, which
+    // left claimed jobs "running" (polite crawling waits seconds between requests). A small batch keeps
+    // each run within the Workers free plan's 50 outbound requests; the daily GitHub run does the bulk.
+    const limit = Math.max(1, Math.min(10, Number(env.WORKER_JOBS_PER_TICK) || 2))
+    try {
+      const r = await tick(env, `cron-${crypto.randomUUID().slice(0, 8)}`, limit, 1)
+      console.log(JSON.stringify({ msg: 'tick', claimed: r.claimed, succeeded: r.succeeded, failed: r.failed, queued: r.queued }))
+    } catch (e) {
+      console.error('tick failed', e)
+    }
   },
 }
