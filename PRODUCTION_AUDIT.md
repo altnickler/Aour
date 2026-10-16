@@ -7,18 +7,22 @@
   - The first classifier also let in non-venues: insurance agencies, bakeries and fast-food chains.
   - After the strict classifier, the reversible clean-up archived 262 untouched listings and corrected the venue type of 28 (run 38942856202).
   - Now: **752 published, 99 drafts, 263 archived. Nothing was deleted.**
-- **Happy hours** (venue websites; 772 pages checked):
-  - **25** places report a happy hour on their own website, and 2 more need verification.
+- **Happy hours** (all 919 venue websites checked once; final run 38957555280):
+  - **54** places publish a happy hour on their own website and show it in the app.
+  - **4** more need verification.
   - **0** are admin-verified. Only an admin can mark one verified.
-  - Within 5 miles: Stuart 10+, Palm City 8, Jensen Beach 10, Hobe Sound 0.
-- **Awaiting admin review:** 10 happy-hour findings (the website mentions a happy hour but no times could be read), and 112 possible duplicates.
+  - Within 5 miles: Stuart 29, Palm City 26, Jensen Beach 26, Hobe Sound 1.
+  - No place is wrongly marked "outdated" any more.
+- **Awaiting admin review:** 15 happy-hour findings (the website mentions a happy hour but no times could be read), and 112 possible duplicates, held as drafts.
 - **Website checks — problems found live and fixed:**
   1. A robots.txt that failed to load was treated as "disallowed" for 30 days, which hit 65 domains. It is now a retried error, and nothing is crawled until robots.txt answers.
   2. Cloudflare's page script was mistaken for a bot wall on normal pages. Genuine walls (about 20 domains) stay blocked.
-  3. The Worker cron called `fetch` with the wrong `this` ("Illegal invocation"), so only the GitHub runner could check websites.
+  3. The Worker cron called `fetch` with the wrong `this` ("Illegal invocation").
+  4. The Worker ran its tick in `waitUntil` (cut off after about 30 s) with 6 jobs, so the jobs it claimed were left "running". It now awaits a 2-job tick. The daily GitHub run also checks websites.
+  5. A page-wide CMS date (`article:modified_time`) marked current happy hours "outdated", and so did a redesigned homepage hiding an unchanged happy-hour page.
 
-  Many remaining "unreachable" sites are dead domains (DNS not found) or have broken TLS certificates.
-- **Tools:** `maintenance.yml` tasks `robots` / `robots --probe` (read-only) and `robots --recheck [--apply]`.
+  The remaining failures are mostly the venues' own problems: dead domains (DNS not found), expired or broken TLS certificates, and sites that redirect to ordering platforms or parked-domain pages.
+- **Tools:** `maintenance.yml` tasks `robots` / `robots --probe` (read-only), `robots --recheck [--apply]` and `refresh-outdated [--apply]`.
 
 ## Live database check — project viqhsibrtdgcwoiitzgz (2026-10-16, via the read-only Production status workflow)
 
