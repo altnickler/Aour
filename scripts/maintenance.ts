@@ -4,6 +4,7 @@
  *   npx tsx scripts/maintenance.ts diagnose       # READ-ONLY: Overture category breakdown for a market
  *   npx tsx scripts/maintenance.ts reclassify     # DRY RUN: what the strict classifier would change
  *   npx tsx scripts/maintenance.ts reclassify --apply
+ *   npx tsx scripts/maintenance.ts robots         # READ-ONLY: venue domains robots.txt keeps us out of, and why
  *
  * reclassify re-reads the market from Overture with the current classifier and, for imported
  * listings it no longer accepts, sets status = 'archived' (reversible; nothing is deleted) — only
@@ -14,6 +15,8 @@
  */
 import { bboxAround, overtureToCandidate, type OvertureRow } from '../src/core/ingest/providers'
 import { openOverture, overtureSql, primaryCategoryExpr } from '../src/pipeline/providers/overture'
+import { isAllowed, robotsFromResponse } from '../src/core/ingest/robots'
+import { USER_AGENT } from '../src/pipeline/fetcher'
 
 const task = process.argv[2] ?? 'diagnose'
 const MARKET = { lat: Number(process.env.MARKET_LAT ?? 27.1975), lng: Number(process.env.MARKET_LNG ?? -80.2528), radiusMiles: Number(process.env.MARKET_RADIUS ?? 15) }
@@ -166,7 +169,41 @@ async function reclassify() {
   console.log(`\nApplied: archived ${archive.length}, corrected type of ${retype.length}.`)
 }
 
-const tasks: Record<string, () => Promise<void>> = { diagnose, reclassify }
+/** Read-only: which venue domains our robots.txt reading blocks, and the rule responsible. */
+async function robots() {
+  const db = await supabase()
+  const rows = await db.all<{ domain: string; robots_status: number | null; robots_txt: string | null; blocked: boolean; blocked_reason: string | null }>(
+    'source_domains?select=domain,robots_status,robots_txt,blocked,blocked_reason&order=domain',
+  )
+  const tally = new Map<string, number>()
+  const add = (k: string) => tally.set(k, (tally.get(k) ?? 0) + 1)
+  console.log(`${rows.length} domains checked\n`)
+  for (const r of rows) {
+    if (r.blocked) {
+      add(`sticky block: ${r.blocked_reason}`)
+      console.log(`BLOCKED  ${r.domain}: ${r.blocked_reason}`)
+      continue
+    }
+    if (r.robots_status === null) continue
+    const rules = robotsFromResponse(r.robots_status, r.robots_txt ?? '', USER_AGENT)
+    if (isAllowed(rules, '/')) {
+      add('homepage allowed')
+      continue
+    }
+    if (rules.disallowAll) {
+      add(`robots.txt unavailable (HTTP ${r.robots_status})`)
+      console.log(`UNAVAILABLE ${r.domain}: robots.txt HTTP ${r.robots_status}`)
+      continue
+    }
+    add('robots.txt disallows the homepage')
+    const lines = (r.robots_txt ?? '').split(/\r?\n/).filter((l) => /^\s*(user-agent|allow|disallow)\s*:/i.test(l)).slice(0, 12)
+    console.log(`DISALLOW ${r.domain} (HTTP ${r.robots_status}, ${(r.robots_txt ?? '').length} bytes):\n    ${lines.join('\n    ')}`)
+  }
+  console.log('\nSummary:')
+  for (const [k, n] of [...tally].sort((a, b) => b[1] - a[1])) console.log(`  ${n}  ${k}`)
+}
+
+const tasks: Record<string, () => Promise<void>> = { diagnose, reclassify, robots }
 if (!tasks[task]) {
   console.error(`Unknown task "${task}". Tasks: ${Object.keys(tasks).join(', ')}`)
   process.exit(2)

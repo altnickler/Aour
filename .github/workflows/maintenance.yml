@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: 'diagnose (read-only) | reclassify (dry run) | reclassify --apply'
+        description: 'diagnose (read-only) | robots (read-only) | reclassify (dry run) | reclassify --apply'
         default: diagnose
 
 jobs:
@@ -29,6 +29,7 @@ jobs:
         run: |
           case "$TASK" in
             "diagnose") npx tsx scripts/maintenance.ts diagnose ;;
+            "robots") npx tsx scripts/maintenance.ts robots ;;
             "reclassify") npx tsx scripts/maintenance.ts reclassify ;;
             "reclassify --apply") npx tsx scripts/maintenance.ts reclassify --apply ;;
             *) echo "Unknown task: $TASK"; exit 2 ;;
