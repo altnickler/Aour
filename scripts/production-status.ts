@@ -172,11 +172,13 @@ async function main() {
     }
     const ids = await all<{ provider: string }>('establishment_external_ids?select=provider&order=external_id&limit=10000')
     out(`- Provider links: ${tally(ids, (x) => x.provider)}`)
-    const jobs = await all<{ kind: string; status: string; attempts: number; last_error: string | null; created_at: string; finished_at: string | null; result: Record<string, unknown> | null }>(
-      'refresh_jobs?select=kind,status,attempts,last_error,created_at,finished_at,result&order=created_at.desc',
+    const jobs = await all<{ kind: string; status: string; attempts: number; last_error: string | null; created_at: string; finished_at: string | null; locked_by: string | null; result: Record<string, unknown> | null }>(
+      'refresh_jobs?select=kind,status,attempts,last_error,created_at,finished_at,locked_by,result&order=created_at.desc',
       1000,
     )
     out(`- Jobs (latest 1000): ${tally(jobs, (j) => `${j.kind}/${j.status}`)}`)
+    const lastHour = jobs.filter((j) => j.finished_at && Date.now() - Date.parse(j.finished_at) < 3_600_000)
+    out(`- Jobs finished in the last hour, by runner: ${tally(lastHour, (j) => `${j.locked_by?.startsWith('gha-') ? 'GitHub' : 'Cloudflare cron'} ${j.status}`) || 'none'}`)
     for (const j of jobs.filter((x) => x.kind === 'discover_market').slice(0, 3)) {
       const r = j.result as { created?: number; updated?: number; createdForReview?: number; sources?: unknown } | null
       out(`  - discovery ${j.status} at ${j.finished_at ?? j.created_at}: created ${r?.created ?? '-'}, for review ${r?.createdForReview ?? '-'}, updated ${r?.updated ?? '-'}, sources ${JSON.stringify(r?.sources ?? null)}${j.last_error ? `, error: ${j.last_error}` : ''}`)
