@@ -55,7 +55,7 @@ npm run deploy                             # vite build + wrangler deploy (wrang
 
 Then in the Cloudflare dashboard, open **Workers & Pages → aour → Settings → Domains & Routes** and add the custom domain `aour.app`.
 
-- `wrangler.jsonc` deploys the PWA as static assets (SPA fallback for client routes) plus a small Worker (`worker/index.ts`).
+- `wrangler.jsonc` deploys the PWA as static assets (SPA fallback for client routes) plus a small Worker (`worker/index.ts`). Deploy with `npm run deploy` (build + `deploy:worker`), never with an assets-only command such as `wrangler deploy --assets dist` without the config.
   - Only `/api/*` runs Worker code, so page views stay free.
   - The Worker also runs the scheduled data pipeline (Cron Trigger every 15 min). See §7.
 - `public/_headers` sets the CSP and security headers. If you use a custom Supabase domain or another map provider, add it to `connect-src` / `img-src`.
@@ -63,19 +63,41 @@ Then in the Cloudflare dashboard, open **Workers & Pages → aour → Settings �
 
 ## 4b. Deploying from the Cloudflare dashboard (Workers Builds)
 
-If the Worker is connected to this GitHub repository in **Workers & Pages → aour → Settings → Build**, Cloudflare builds and deploys on every push to the connected branch. `deploy.yml` does not run in that setup, so configure these yourself:
+Aour is **one Worker with a script plus static assets**:
 
-- **Build command:** `npm run build`. **Deploy command:** `npx wrangler deploy`.
-- **Build variables** (Settings → Build → Variables and secrets), because they are compiled into the web app:
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_ANON_KEY`
-  - `VITE_SITE_URL`
+- the PWA is served from `dist/`;
+- `worker/index.ts` handles `/api/*` and the Cron Trigger.
 
-  Without them, the build ships in demo mode. On a public hostname the app then shows "Aour is almost ready" instead of fictional listings.
-- **Runtime variables and secrets** (Settings → Variables and secrets): see §7.
-- **Check what is live:**
-  - `https://<your-worker>/version.json` shows the commit, branch, builder and `backend` (`supabase` or `demo`).
-  - `https://<your-worker>/api/health` shows `pipeline` and `missing` (names of unset Worker secrets, never values).
+If Cloudflare deploys it as *assets only*, the API, cron and runtime variables are all missing. The Variables page then says "Variables cannot be added to a Worker that only has static assets". To prevent this, deploy with the repository's own command, which:
+
+- checks the config;
+- refuses assets-only uploads;
+- attaches the runtime settings.
+
+In **Workers & Pages → aour → Settings → Build**:
+
+| Setting | Value |
+|---|---|
+| Build command | `npm run build` |
+| Deploy command | `npm run deploy:worker` |
+| Non-production branch deploy command | `npm run deploy:worker -- --upload` |
+| Build variables | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SITE_URL` (public; compiled into the app) |
+
+What `npm run deploy:worker` does:
+
+- **Sets the public Worker variables.** It sets `SUPABASE_URL` and `SUPABASE_ANON_KEY` from those build variables automatically.
+- **Uploads server secrets.**
+  - Add `SUPABASE_SERVICE_ROLE_KEY` as an encrypted Worker secret under **Settings → Variables and secrets** (type *Secret*). This works once a deploy has gone through this command.
+  - Alternatively, add it as a **build secret** (type *Secret*, never a `VITE_` variable). The deploy command uploads it as an encrypted Worker secret through a temporary 0600 file.
+  - It refuses to deploy if any server secret is a `VITE_` variable or appears in the built client files.
+- **Keeps existing secrets.** Worker secrets that are not provided are left in place.
+
+To check what is live:
+
+- `https://<your-worker>/version.json` shows the commit, branch, builder and `backend` (`supabase` or `demo`).
+- `https://<your-worker>/api/health` shows `pipeline` and `missing`: the names of unset Worker settings, never their values.
+
+Before pushing, `npm run check:worker` builds and dry-runs the deploy. It fails unless the bundle contains the `/api/*` routes and the `scheduled()` handler.
 
 ## 5. Automated deploys from GitHub
 

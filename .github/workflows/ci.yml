@@ -21,6 +21,10 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - name: Worker bundle check (full Worker, API routes, cron handler; no upload)
+        run: npm run check:worker
+        env:
+          WRANGLER_SEND_METRICS: 'false'
 
   database:
     name: Migrations, RLS & rating parity

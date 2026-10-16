@@ -18,10 +18,12 @@
     "test:e2e": "playwright test",
     "test:all": "npm run typecheck && npm run lint && npm run test && npm run test:db && npm run build && npm run test:e2e",
     "icons": "node scripts/generate-icons.mjs",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run build && npm run deploy:worker",
     "pipeline": "tsx scripts/pipeline.ts",
     "test:smoke": "vitest run --project smoke",
-    "test:staging": "vitest run --project staging"
+    "test:staging": "vitest run --project staging",
+    "deploy:worker": "tsx scripts/deploy-worker.ts",
+    "check:worker": "npm run build && tsx scripts/deploy-worker.ts --dry-run --outdir .wrangler/dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

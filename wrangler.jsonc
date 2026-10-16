@@ -1,6 +1,8 @@
-// Cloudflare Worker: serves the PWA from static assets and runs the scheduled data pipeline.
-// Only /api/* executes Worker code; every other request is a free static-asset hit.
-// Deploy: `npm run deploy` (or the GitHub Actions workflow). Secrets & plan: DEPLOYMENT.md
+// Cloudflare Worker: serves the PWA from static assets AND runs a Worker script (worker/index.ts)
+// for /api/* and the scheduled data pipeline. Only /api/* executes Worker code; every other
+// request is a free static-asset hit.
+// Deploy with `npm run deploy:worker` (Cloudflare Workers Builds "Deploy command" and deploy.yml):
+// it refuses assets-only uploads and attaches runtime vars/secrets. See DEPLOYMENT.md §4b.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "aour",
