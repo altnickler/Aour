@@ -1,0 +1,28 @@
+name: Production status
+
+# READ-ONLY report: deployed build, Worker health, which database migrations are applied,
+# markets, what users see near Stuart / Palm City / Jensen Beach / Hobe Sound, and (when the
+# service-role secret is available) pipeline jobs, imported venues, findings and budgets.
+# Results appear on the run's Summary page. Never writes to the database.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/aour-happy-hour-app-pptgkb]
+    paths: [scripts/production-status.ts, .github/workflows/production-status.yml, vite.config.ts]
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://aour.mute-frost-03a9.workers.dev' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # On push, check the build Cloudflare deploys from this commit (waits up to 10 minutes).
+      EXPECT_COMMIT: ${{ github.event_name == 'push' && github.sha || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsx scripts/production-status.ts

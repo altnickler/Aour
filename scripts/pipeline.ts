@@ -19,11 +19,23 @@ import { supabaseRpc } from '../src/pipeline/rest'
 import { createStore } from '../src/pipeline/store'
 
 const mode = process.argv[2] ?? 'enrich'
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OVERTURE_RELEASE, DISCOVERY_SOURCES, ANTHROPIC_API_KEY, ANTHROPIC_MODEL } = process.env
+const { SUPABASE_SERVICE_ROLE_KEY, OVERTURE_RELEASE, DISCOVERY_SOURCES, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, SITE_URL } = process.env
+let SUPABASE_URL = process.env.SUPABASE_URL
+// The project URL is public: when not configured, read it from the deployed site's /version.json.
+if (!SUPABASE_URL && SITE_URL) {
+  try {
+    const res = await fetch(`${SITE_URL.replace(/\/+$/, '')}/version.json`, { signal: AbortSignal.timeout(20_000) })
+    const v = (await res.json()) as { supabase?: { url?: string } | null }
+    SUPABASE_URL = v.supabase?.url
+  } catch (e) {
+    console.error(`Could not read ${SITE_URL}/version.json: ${(e as Error).message}`)
+  }
+}
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (server-side secrets; never ship them to the client).')
+  console.error('SUPABASE_URL (or SITE_URL) and SUPABASE_SERVICE_ROLE_KEY are required (server-side secrets; never ship them to the client).')
   process.exit(2)
 }
+console.log(`Pipeline ${mode} against project ${new URL(SUPABASE_URL).hostname.split('.')[0]}`)
 
 const rpc = supabaseRpc(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const wanted = (DISCOVERY_SOURCES ?? 'overture').split(',').map((s) => s.trim())

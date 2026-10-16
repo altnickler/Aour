@@ -22,7 +22,9 @@ jobs:
     environment: production
     timeout-minutes: 30
     env:
+      # Public project URL: from this variable if set, else read from the live site's /version.json.
       SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://aour.mute-frost-03a9.workers.dev' }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       OVERTURE_RELEASE: ${{ vars.OVERTURE_RELEASE }}
       DISCOVERY_SOURCES: ${{ vars.DISCOVERY_SOURCES || 'overture' }}
@@ -37,3 +39,6 @@ jobs:
       - name: Not configured
         if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
         run: echo "::warning::SUPABASE_SERVICE_ROLE_KEY is not set for the production environment; discovery skipped (see DEPLOYMENT.md)."
+      - name: Production status (read-only)
+        if: ${{ always() }}
+        run: npx tsx scripts/production-status.ts

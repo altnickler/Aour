@@ -28,6 +28,9 @@ function versionFile(env: Record<string, string>): Plugin {
     builtAt: new Date().toISOString(),
     builtBy: process.env.WORKERS_CI ? 'cloudflare-workers-builds' : process.env.GITHUB_ACTIONS ? 'github-actions' : 'local',
     backend,
+    // Public connection values (already compiled into the app bundle; protected by RLS). Lets
+    // operational tooling (.github/workflows/production-status.yml) find the database. Never secrets.
+    supabase: backend === 'supabase' ? { url: env.VITE_SUPABASE_URL.replace(/\/+$/, ''), anonKey: env.VITE_SUPABASE_ANON_KEY } : null,
   }
   return {
     name: 'aour-version-file',
