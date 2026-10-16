@@ -60,7 +60,7 @@ WHERE bbox.xmin BETWEEN $west AND $east
   AND regexp_matches(lower(coalesce(${basic}, '') || ' ' || array_to_string(${categories}, ' ')), '${CATEGORY_RE}')`
 }
 
-interface DuckConnection {
+export interface DuckConnection {
   run(sql: string): Promise<unknown>
   runAndReadAll(sql: string, params?: Record<string, unknown>): Promise<{ getRowObjectsJS(): Record<string, unknown>[] }>
   closeSync?(): void
@@ -81,32 +81,67 @@ export function newestRelease(files: string[]): string | null {
  * @param root     Release root; defaults to the public bucket (tests point it at a local directory).
  * @param path     Explicit Parquet glob (overrides release/root).
  */
-export function overtureSource(opts: { release?: string; root?: string; path?: string; connect?: () => Promise<DuckConnection> }): PlaceSource {
+export interface OvertureOptions {
+  release?: string
+  root?: string
+  path?: string
+  connect?: () => Promise<DuckConnection>
+}
+
+export interface OpenRelease {
+  conn: DuckConnection
+  path: string
+  cols: OvertureColumns
+  close(): void
+}
+
+/** Connect, resolve the release (newest unless pinned) and read its column layout. */
+export async function openOverture(opts: OvertureOptions): Promise<OpenRelease> {
   const root = (opts.root ?? OVERTURE_BUCKET).replace(/\/+$/, '')
-  let resolved: string | null = opts.path ?? (opts.release ? `${root}/${opts.release}/theme=places/type=place/*` : null)
+  let path: string | null = opts.path ?? (opts.release ? `${root}/${opts.release}/theme=places/type=place/*` : null)
+  const conn = await (opts.connect ?? defaultConnect)()
+  try {
+    // Public bucket: anonymous reads, no credentials needed.
+    if ((path ?? root).startsWith('s3://')) await conn.run("SET s3_region = 'us-west-2'")
+    if (!path) {
+      const listing = await conn.runAndReadAll('SELECT file FROM glob($pattern)', { pattern: `${root}/*/theme=places/type=place/*` })
+      const latest = newestRelease(listing.getRowObjectsJS().map((r) => String(r.file)))
+      if (!latest) throw new Error(`No Overture places release found under ${root}; set OVERTURE_RELEASE (https://docs.overturemaps.org/release/latest/)`)
+      path = `${root}/${latest}/theme=places/type=place/*`
+    }
+    const described = await conn.runAndReadAll('DESCRIBE SELECT * FROM read_parquet($path, hive_partitioning = true)', { path })
+    const cols: OvertureColumns = new Map(described.getRowObjectsJS().map((r) => [String(r.column_name), String(r.column_type)]))
+    return { conn, path, cols, close: () => conn.closeSync?.() }
+  } catch (e) {
+    conn.closeSync?.()
+    throw e
+  }
+}
+
+/** SQL expression for a place's primary (most specific) category in this release. */
+export function primaryCategoryExpr(cols: OvertureColumns): string {
+  const t = (cols.get('taxonomy') ?? '').toLowerCase()
+  const c = (cols.get('categories') ?? '').toLowerCase()
+  if (/"?primary"? varchar/.test(t)) return 'taxonomy.primary'
+  if (t.includes('hierarchy')) return 'taxonomy.hierarchy[-1]'
+  if (/"?primary"? varchar/.test(c)) return 'categories.primary'
+  return 'NULL::VARCHAR'
+}
+
+export function overtureSource(opts: OvertureOptions): PlaceSource {
   return {
     provider: 'overture',
     budgetKey: 'overture',
     async fetchCandidates(bbox) {
-      const conn = await (opts.connect ?? defaultConnect)()
+      const rel = await openOverture(opts)
       try {
-        // Public bucket: anonymous reads, no credentials needed.
-        if ((resolved ?? root).startsWith('s3://')) await conn.run("SET s3_region = 'us-west-2'")
-        if (!resolved) {
-          const listing = await conn.runAndReadAll('SELECT file FROM glob($pattern)', { pattern: `${root}/*/theme=places/type=place/*` })
-          const latest = newestRelease(listing.getRowObjectsJS().map((r) => String(r.file)))
-          if (!latest) throw new Error(`No Overture places release found under ${root}; set OVERTURE_RELEASE (https://docs.overturemaps.org/release/latest/)`)
-          resolved = `${root}/${latest}/theme=places/type=place/*`
-        }
-        const described = await conn.runAndReadAll('DESCRIBE SELECT * FROM read_parquet($path, hive_partitioning = true)', { path: resolved })
-        const cols: OvertureColumns = new Map(described.getRowObjectsJS().map((r) => [String(r.column_name), String(r.column_type)]))
-        const reader = await conn.runAndReadAll(overtureSql(cols), { path: resolved, west: bbox.west, east: bbox.east, south: bbox.south, north: bbox.north })
+        const reader = await rel.conn.runAndReadAll(overtureSql(rel.cols), { path: rel.path, west: bbox.west, east: bbox.east, south: bbox.south, north: bbox.north })
         return reader
           .getRowObjectsJS()
           .map((r) => overtureToCandidate(toRow(r)))
           .filter((c): c is CandidatePlace => !!c)
       } finally {
-        conn.closeSync?.()
+        rel.close()
       }
     },
   }

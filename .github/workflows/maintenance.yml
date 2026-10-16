@@ -1,0 +1,26 @@
+name: Data maintenance
+
+# Manual data-maintenance tasks for the discovery pipeline. "diagnose" is read-only.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: diagnose (read-only)
+        default: diagnose
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://aour.mute-frost-03a9.workers.dev' }}
+      SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OVERTURE_RELEASE: ${{ vars.OVERTURE_RELEASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsx scripts/maintenance.ts "${{ github.event.inputs.task || 'diagnose' }}"
