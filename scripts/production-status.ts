@@ -177,8 +177,10 @@ async function main() {
       1000,
     )
     out(`- Jobs (latest 1000): ${tally(jobs, (j) => `${j.kind}/${j.status}`)}`)
-    const lastHour = jobs.filter((j) => j.finished_at && Date.now() - Date.parse(j.finished_at) < 3_600_000)
-    out(`- Jobs finished in the last hour, by runner: ${tally(lastHour, (j) => `${j.locked_by?.startsWith('gha-') ? 'GitHub' : 'Cloudflare cron'} ${j.status}`) || 'none'}`)
+    // Finished jobs no longer carry locked_by, so show recency instead: the Cloudflare cron runs every 15 minutes.
+    const recent = jobs.filter((j) => j.finished_at && Date.now() - Date.parse(j.finished_at) < 30 * 60_000)
+    out(`- Jobs finished in the last 30 minutes: ${tally(recent, (j) => j.status) || 'none'}; running now: ${jobs.filter((j) => j.status === 'running').map((j) => j.locked_by).join(', ') || 'none'}`)
+    for (const j of recent.filter((x) => x.status === 'failed').slice(0, 8)) out(`  - failed at ${j.finished_at}: ${(j.last_error ?? '').slice(0, 140)}`)
     for (const j of jobs.filter((x) => x.kind === 'discover_market').slice(0, 3)) {
       const r = j.result as { created?: number; updated?: number; createdForReview?: number; sources?: unknown } | null
       out(`  - discovery ${j.status} at ${j.finished_at ?? j.created_at}: created ${r?.created ?? '-'}, for review ${r?.createdForReview ?? '-'}, updated ${r?.updated ?? '-'}, sources ${JSON.stringify(r?.sources ?? null)}${j.last_error ? `, error: ${j.last_error}` : ''}`)
