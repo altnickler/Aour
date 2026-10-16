@@ -156,11 +156,21 @@ async function main() {
   }
   out('## Pipeline internals (service role, read-only)')
   try {
-    const est = await all<{ status: string; origin: string; hh_status: string; website: string | null; market_id: string }>('establishments?select=status,origin,hh_status,website,market_id&limit=10000')
+    const est = await all<{ name: string; city: string; lat: number; lng: number; status: string; origin: string; hh_status: string; website: string | null; market_id: string }>(
+      'establishments?select=name,city,lat,lng,status,origin,hh_status,website,market_id&order=id&limit=10000',
+    )
     out(`- Establishments: ${est.length} total — status: ${tally(est, (e) => e.status)}; origin: ${tally(est, (e) => e.origin)}`)
     out(`- Happy-hour status: ${tally(est, (e) => e.hh_status)}`)
     out(`- With a website to check: ${est.filter((e) => e.website).length}`)
-    const ids = await all<{ provider: string }>('establishment_external_ids?select=provider&limit=10000')
+    const withHh = est.filter((e) => e.hh_status !== 'none')
+    if (withHh.length) {
+      out('- Places with happy-hour information:')
+      for (const e of withHh.slice(0, 40)) {
+        const mi = Math.hypot((e.lat - 27.1975) * 69, (e.lng + 80.2528) * 61.4).toFixed(1)
+        out(`  - ${e.name} (${e.city}, ${mi} mi from Stuart) — ${e.hh_status}, listing ${e.status}`)
+      }
+    }
+    const ids = await all<{ provider: string }>('establishment_external_ids?select=provider&order=external_id&limit=10000')
     out(`- Provider links: ${tally(ids, (x) => x.provider)}`)
     const jobs = await all<{ kind: string; status: string; attempts: number; last_error: string | null; created_at: string; finished_at: string | null; result: Record<string, unknown> | null }>(
       'refresh_jobs?select=kind,status,attempts,last_error,created_at,finished_at,result&order=created_at.desc',
@@ -171,6 +181,12 @@ async function main() {
       const r = j.result as { created?: number; updated?: number; createdForReview?: number; sources?: unknown } | null
       out(`  - discovery ${j.status} at ${j.finished_at ?? j.created_at}: created ${r?.created ?? '-'}, for review ${r?.createdForReview ?? '-'}, updated ${r?.updated ?? '-'}, sources ${JSON.stringify(r?.sources ?? null)}${j.last_error ? `, error: ${j.last_error}` : ''}`)
     }
+    const enrich = jobs.filter((j) => j.kind === 'enrich_establishment' && j.result)
+    const reason = (j: (typeof jobs)[number]) => {
+      const r = j.result as { outcome?: string; reason?: string } | null
+      return `${r?.outcome ?? '?'}: ${(r?.reason ?? '').replace(/https?:\/\/\S+/g, '<url>').replace(/\d{3}/g, (m) => m).slice(0, 70)}`
+    }
+    out(`- Website refresh outcomes: ${tally(enrich, reason)}`)
     const errors = jobs.filter((j) => j.last_error).slice(0, 5)
     for (const j of errors) out(`  - ⚠️ ${j.kind} ${j.status}: ${j.last_error}`)
     const findings = await all<{ status: string; method: string; source_kind: string }>('hh_findings?select=status,method,source_kind&limit=10000')
