@@ -12,6 +12,7 @@ import type { Establishment } from '@/core/types'
 const ListingEditor = lazy(() => import('./ListingEditor'))
 const Queues = lazy(() => import('./Queues'))
 const People = lazy(() => import('./People'))
+const Pipeline = lazy(() => import('./Pipeline'))
 
 export const adminKeys = {
   stats: ['admin', 'stats'] as const,
@@ -21,6 +22,7 @@ export const adminKeys = {
 const NAV = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/listings', label: 'Listings' },
+  { to: '/admin/data', label: 'Data pipeline' },
   { to: '/admin/submissions', label: 'Submissions' },
   { to: '/admin/reports', label: 'Reports' },
   { to: '/admin/users', label: 'Users' },
@@ -62,6 +64,8 @@ export default function AdminScreen() {
           <Route path="listings" element={<Listings />} />
           <Route path="listings/new" element={<ListingEditor />} />
           <Route path="listings/:id" element={<ListingEditor />} />
+          <Route path="data" element={<Pipeline />} />
+          <Route path="data/:tab" element={<Pipeline />} />
           <Route path="submissions" element={<Queues kind="submissions" />} />
           <Route path="reports" element={<Queues kind="reports" />} />
           <Route path="users" element={<People kind="users" />} />

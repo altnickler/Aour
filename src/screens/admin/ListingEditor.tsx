@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { BadgeCheck, Plus, Trash2, X } from 'lucide-react'
 import { api, type EstablishmentInput } from '@/data'
@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn'
 import { Button, Chip, Field, Input, Spinner, Textarea } from '@/components/ui'
 import { errorMessage, useToast } from '@/components/toast'
 import { adminKeys, FreshTag } from './Admin'
+import { JobList } from './Pipeline'
 
 const SOURCE_KINDS: { key: ListingSource['kind']; label: string }[] = [
   { key: 'phone', label: 'Called the venue' },
@@ -23,6 +24,8 @@ const SOURCE_KINDS: { key: ListingSource['kind']; label: string }[] = [
   { key: 'social', label: "Venue's social media" },
   { key: 'user_submission', label: 'User submission (confirmed)' },
 ]
+/** Recorded by approving automated findings; not offered as manual choices. */
+const AUTO_SOURCE_LABEL: Record<string, string> = { official_website: "Venue's website (automated finding)", open_data: 'Open data (automated finding)' }
 
 function emptyInput(marketId: string, prefill?: Record<string, string>): EstablishmentInput {
   return {
@@ -85,7 +88,8 @@ export default function ListingEditor() {
   const { id } = useParams()
   const listings = useQuery({ queryKey: adminKeys.listings, queryFn: () => api.admin.listEstablishments() })
   const existing = id ? listings.data?.find((e) => e.id === id) : undefined
-  const { market } = useLocationState()
+  const { market: here, markets } = useLocationState()
+  const market = here ?? markets[0]
   if (listings.isLoading || !market) return <div className="flex justify-center py-16"><Spinner /></div>
   if (id && !existing) return <p className="p-6 text-center text-muted">Listing not found.</p>
   const prefill = (() => {
@@ -102,7 +106,8 @@ function Editor({ initial, existing }: { initial: EstablishmentInput; existing?:
   const [f, setF] = useState(initial)
   const [busy, setBusy] = useState(false)
   const [slugTouched, setSlugTouched] = useState(!!initial.id)
-  const { market } = useLocationState()
+  const { markets } = useLocationState()
+  const market = markets.find((m) => m.id === f.marketId)
   const toast = useToast()
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -321,6 +326,7 @@ function Editor({ initial, existing }: { initial: EstablishmentInput; existing?:
 
       {existing && <VerifyPanel establishment={existing} />}
       {existing && <PhotosPanel establishment={existing} />}
+      {existing && api.mode === 'supabase' && <AutomationPanel establishment={existing} />}
       {existing && (
         <Button
           variant="danger"
@@ -398,13 +404,123 @@ function VerifyPanel({ establishment }: { establishment: Establishment }) {
         <ul className="divide-y divide-line text-sm">
           {sources.data!.map((s) => (
             <li key={s.id} className="py-2">
-              <b className="text-choc">{new Date(s.createdAt).toLocaleDateString()}</b> · {SOURCE_KINDS.find((k) => k.key === s.kind)?.label}
+              <b className="text-choc">{new Date(s.createdAt).toLocaleDateString()}</b> · {SOURCE_KINDS.find((k) => k.key === s.kind)?.label ?? AUTO_SOURCE_LABEL[s.kind] ?? s.kind}
               {s.note && <span className="block text-muted">{s.note}</span>}
               {s.url && <a className="block truncate text-choc underline" href={s.url} target="_blank" rel="noreferrer">{s.url}</a>}
             </li>
           ))}
         </ul>
       )}
+    </Panel>
+  )
+}
+
+/** Who manages the happy-hour data, what automation did, and a manual refresh. */
+function AutomationPanel({ establishment }: { establishment: Establishment }) {
+  const history = useQuery({ queryKey: ['admin', 'history', establishment.id], queryFn: () => api.admin.pipeline.history(establishment.id) })
+  const findings = useQuery({ queryKey: ['admin', 'findings', 'all', establishment.id], queryFn: () => api.admin.pipeline.listFindings('all', establishment.id) })
+  const qc = useQueryClient()
+  const toast = useToast()
+  const h = history.data
+  const l = h?.listing
+  const act = async (fn: () => Promise<unknown>, ok: string) => {
+    try {
+      await fn()
+      await qc.invalidateQueries({ queryKey: ['admin'] })
+      toast(ok)
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
+  }
+  const fmt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—')
+  return (
+    <Panel
+      title="Automation & history"
+      subtitle="Admin edits lock the happy-hour data: automated refreshes then only propose changes for review. Hand it back to let the pipeline keep it current."
+    >
+      {!l ? (
+        <Spinner />
+      ) : (
+        <>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted">Managed by</dt>
+            <dd className="font-semibold text-choc">{l.managedBy === 'admin' ? 'Admin (locked)' : 'Automation'}</dd>
+            <dt className="text-muted">Origin</dt>
+            <dd className="text-choc">{l.origin}</dd>
+            <dt className="text-muted">Internal confidence</dt>
+            <dd className="text-choc">{l.confidence == null ? '—' : `${Math.round(l.confidence * 100)}%`}{l.conflict ? ' · sources conflict' : ''}</dd>
+            <dt className="text-muted">Last confirmed</dt>
+            <dd className="text-choc">{fmt(l.lastConfirmedAt)}</dd>
+            <dt className="text-muted">Last refresh</dt>
+            <dd className="text-choc">{fmt(l.lastEnrichAttemptAt)}{l.enrichFailures ? ` · ${l.enrichFailures} failures` : ''}</dd>
+            <dt className="text-muted">Next refresh</dt>
+            <dd className="text-choc">{fmt(l.nextEnrichAt)}</dd>
+            {l.lockedFields.length > 0 && (
+              <>
+                <dt className="text-muted">Locked fields</dt>
+                <dd className="text-choc">{l.lockedFields.join(', ')}</dd>
+              </>
+            )}
+            {l.attribution && (
+              <>
+                <dt className="text-muted">Attribution</dt>
+                <dd className="text-choc">{l.attribution}</dd>
+              </>
+            )}
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => act(async () => {
+              await api.admin.pipeline.enqueueRefresh('enrich_establishment', establishment.id)
+              await api.admin.pipeline.runNow()
+            }, 'Refresh queued')}>
+              Refresh now
+            </Button>
+            {l.managedBy === 'admin' ? (
+              <Button size="sm" variant="secondary" onClick={() => act(() => api.admin.pipeline.setManagedBy(establishment.id, 'auto'), 'Handed back to automation')}>
+                Hand back to automation
+              </Button>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => act(() => api.admin.pipeline.setManagedBy(establishment.id, 'admin'), 'Locked for admin management')}>
+                Lock (admin-managed)
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+      {(findings.data ?? []).filter((f) => f.status === 'pending').length > 0 && (
+        <p className="rounded-tile bg-gold/15 p-3 text-sm text-choc">
+          {(findings.data ?? []).filter((f) => f.status === 'pending').length} finding(s) waiting for review —{' '}
+          <Link to="/admin/data/findings" className="font-bold underline">review</Link>
+        </p>
+      )}
+      {h && h.changes.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-muted uppercase">Change history</h3>
+          <ul className="mt-1 divide-y divide-line text-sm">
+            {h.changes.map((c) => (
+              <li key={c.id} className="py-1.5">
+                <b className="text-choc">{fmt(c.created_at)}</b> · {c.actor === 'admin' ? 'Admin' : 'Pipeline'} · {c.summary}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {h && h.documents.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-muted uppercase">Sources checked</h3>
+          <ul className="mt-1 space-y-1 text-xs">
+            {h.documents.map((d) => (
+              <li key={d.url} className="truncate text-choc">
+                {d.outcome ?? '—'} ({d.last_status ?? '—'}) · {fmt(d.last_attempt_at)} · <a href={d.url} target="_blank" rel="noopener noreferrer nofollow" className="underline">{d.url}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {h && h.externalIds.length > 0 && (
+        <p className="text-xs text-muted">Provider ids: {h.externalIds.map((x) => `${x.provider}:${x.external_id}`).join(' · ')}</p>
+      )}
+      {h && h.jobs.length > 0 && <JobList jobs={h.jobs.slice(0, 5)} />}
     </Panel>
   )
 }

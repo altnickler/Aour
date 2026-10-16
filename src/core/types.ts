@@ -237,7 +237,7 @@ export interface ReviewReport {
 export interface ListingSource {
   id: string
   establishmentId: string
-  kind: 'in_person' | 'phone' | 'website' | 'menu_photo' | 'owner' | 'user_submission' | 'social'
+  kind: 'in_person' | 'phone' | 'website' | 'menu_photo' | 'owner' | 'user_submission' | 'social' | 'official_website' | 'open_data'
   url: string | null
   note: string | null
   observedOn: string

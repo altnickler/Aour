@@ -19,13 +19,30 @@ import type {
   Visit,
 } from '@/core/types'
 import { EMPTY_COMMUNITY_STATS, sanitizeWeights, type CommunityStats } from '@/core/rating'
-import { ApiError, type AdminApi, type Api, type AuthUser, type EstablishmentInput, type GeoResult, type ProfilePatch, type UserCard } from '../api'
+import {
+  ApiError,
+  type AdminApi,
+  type Api,
+  type AuthUser,
+  type DuplicatePair,
+  type EstablishmentInput,
+  type Finding,
+  type GeoResult,
+  type ListingHistory,
+  type PipelineOverview,
+  type ProfilePatch,
+  type UserCard,
+} from '../api'
 import type { LatLng } from '@/core/listing'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const EST_SELECT =
-  '*, happy_hour_windows(*), schedule_exceptions(*), happy_hour_specials(*), establishment_photos(*), establishment_stats(*)'
+// Explicit public columns: pipeline internals are not readable through the public API.
+const EST_COLUMNS =
+  'id, slug, name, kind, market_id, neighborhood, city, state, address, postal_code, lat, lng, timezone, phone, website, description, ' +
+  'price_level, amenities, hh_status, hh_verified_at, hh_source_note, status, is_demo, created_at, updated_at, attribution, ' +
+  'business_hours, hh_source_url, hh_last_confirmed_at, hh_restrictions'
+const EST_SELECT = `${EST_COLUMNS}, happy_hour_windows(*), schedule_exceptions(*), happy_hour_specials(*), establishment_photos(*), establishment_stats(*)`
 const VISIT_SELECT = '*, rating_scores(category_key, score), visit_tags(tag), visit_notes(body), reviews(body, status), visit_photos(storage_path)'
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -576,6 +593,45 @@ export class SupabaseApi implements Api {
 
   // Admin -----------------------------------------------------------------------------
   admin: AdminApi = {
+    pipeline: {
+      overview: () => this.rpc<PipelineOverview>('admin_pipeline_overview'),
+      listFindings: (status, establishmentId) => this.rpc<Finding[]>('admin_list_findings', { p_status: status, p_establishment: establishmentId ?? null }),
+      reviewFinding: async (id, action, note) => {
+        await this.rpc('admin_review_finding', { p_finding: id, p_action: action, p_note: note })
+      },
+      setManagedBy: async (id, managedBy) => {
+        await this.rpc('admin_set_hh_managed', { p_establishment: id, p_managed_by: managedBy })
+      },
+      listDuplicates: () => this.rpc<DuplicatePair[]>('admin_list_duplicates'),
+      resolveDuplicate: async (id, action) => {
+        await this.rpc('admin_resolve_duplicate', { p_duplicate: id, p_action: action })
+      },
+      mergeEstablishments: async (keep, merge) => {
+        await this.rpc('admin_merge_establishments', { p_keep: keep, p_merge: merge })
+      },
+      enqueueRefresh: async (kind, target) => {
+        await this.rpc('admin_enqueue_refresh', { p_kind: kind, p_target: target })
+      },
+      runNow: async () => {
+        const { data } = await this.client.auth.getSession()
+        const token = data.session?.access_token
+        if (!token) return false
+        try {
+          const res = await fetch('/api/admin/run', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+          return res.status === 202
+        } catch {
+          return false
+        }
+      },
+      setProviderLimit: async (provider, limit, enabled) => {
+        await this.rpc('admin_set_provider_limit', { p_provider: provider, p_monthly_limit: limit, p_enabled: enabled })
+      },
+      saveMarket: (input) => this.rpc<string>('admin_save_market', { p: input }),
+      dismissCoverage: async (cell) => {
+        await this.rpc('admin_dismiss_coverage', { p_cell: cell })
+      },
+      history: (id) => this.rpc<ListingHistory>('admin_listing_history', { p_establishment: id }),
+    },
     stats: () => this.rpc('admin_stats'),
     listEstablishments: async () => {
       const rows = check(await this.client.from('establishments').select(EST_SELECT).order('name').limit(2000))

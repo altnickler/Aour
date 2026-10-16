@@ -240,13 +240,27 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Location-aware search (public)
 -- ---------------------------------------------------------------------------
+-- Public columns only. Pipeline internals (confidence, fingerprints, crawl state, locks, who
+-- verified or created a row) are readable by admins through admin RPCs, never by the public API.
+revoke select on public.establishments from anon, authenticated;
+grant select (
+  id, slug, name, kind, market_id, neighborhood, city, state, address, postal_code, lat, lng, timezone,
+  phone, website, description, price_level, amenities, hh_status, hh_verified_at, hh_source_note, status, is_demo,
+  created_at, updated_at, attribution, business_hours, business_hours_source, hh_source_url, hh_source_published_at,
+  hh_last_confirmed_at, hh_restrictions, merged_into
+) on public.establishments to anon, authenticated;
+
 -- Published places within a radius, nearest first, using the GiST geography index.
--- SECURITY INVOKER: RLS still applies. Returns table rows so PostgREST can embed relations.
+-- Returns table rows so PostgREST can embed relations; it runs as definer so it can build
+-- those rows, but returns ONLY published places and blanks every non-public column.
 create function public.nearby_establishments(
   p_lat double precision, p_lng double precision, p_radius_m integer default 8047, p_limit integer default 300
 ) returns setof public.establishments
-language sql stable security invoker set search_path = '' as $$
-  select e.*
+language sql stable security definer set search_path = '' as $$
+  select (jsonb_populate_record(null::public.establishments, to_jsonb(e) - array[
+    'hh_verified_by', 'created_by', 'location', 'origin', 'hh_confidence', 'hh_managed_by', 'hh_checked_at',
+    'hh_last_changed_at', 'hh_conflict', 'hh_fingerprint', 'locked_fields', 'enrich_priority', 'next_enrich_at',
+    'enrich_failures', 'last_enrich_attempt_at', 'last_enrich_success_at'])).*
   from public.establishments e
   where e.status = 'published'
     and extensions.st_dwithin(
@@ -1028,7 +1042,14 @@ begin
     'jobs', (select coalesce(jsonb_agg(to_jsonb(j) order by j.created_at desc), '[]') from (
       select * from public.refresh_jobs where target_id = p_establishment order by created_at desc limit 20) j),
     'documents', (select coalesce(jsonb_agg(to_jsonb(d)), '[]') from public.source_documents d where d.establishment_id = p_establishment),
-    'externalIds', (select coalesce(jsonb_agg(to_jsonb(x)), '[]') from public.establishment_external_ids x where x.establishment_id = p_establishment)
+    'externalIds', (select coalesce(jsonb_agg(to_jsonb(x)), '[]') from public.establishment_external_ids x where x.establishment_id = p_establishment),
+    'listing', (select jsonb_build_object(
+      'managedBy', hh_managed_by, 'origin', origin, 'confidence', hh_confidence, 'conflict', hh_conflict,
+      'lockedFields', locked_fields, 'attribution', attribution, 'checkedAt', hh_checked_at,
+      'lastConfirmedAt', hh_last_confirmed_at, 'lastChangedAt', hh_last_changed_at, 'nextEnrichAt', next_enrich_at,
+      'lastEnrichAttemptAt', last_enrich_attempt_at, 'lastEnrichSuccessAt', last_enrich_success_at,
+      'enrichFailures', enrich_failures, 'mergedInto', merged_into)
+      from public.establishments where id = p_establishment)
   );
 end $$;
 

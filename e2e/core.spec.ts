@@ -213,6 +213,18 @@ test.describe('Administration', () => {
     await expect(page.getByText(/Verified today/)).toBeVisible()
   })
 
+  test('admin data pipeline area is reachable and honest about demo mode', async ({ page }) => {
+    await start(page)
+    await signIn(page, 'ops@example.com')
+    await page.goto('/admin/data')
+    await expect(page.getByText(/Demo mode: the automated pipeline only runs/)).toBeVisible()
+    const tabs = page.getByRole('navigation', { name: 'Data pipeline' })
+    await tabs.getByRole('link', { name: 'Findings', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Nothing to review' })).toBeVisible()
+    await tabs.getByRole('link', { name: 'Duplicates', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Merge two listings' })).toBeVisible()
+  })
+
   test('non-admins cannot open the dashboard', async ({ page }) => {
     await start(page)
     await signIn(page, 'first@example.com')

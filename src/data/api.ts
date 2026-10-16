@@ -92,7 +92,146 @@ export interface EstablishmentInput {
   specials: Omit<Special, 'id'>[]
 }
 
+// Data pipeline (admin) ------------------------------------------------------------
+
+export interface PipelineBudget {
+  provider: string
+  limit: number
+  used: number
+  enabled: boolean
+  note: string | null
+}
+
+export interface PipelineJob {
+  id: string
+  kind: 'discover_market' | 'enrich_establishment'
+  target_id: string
+  target_name: string | null
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped'
+  attempts: number
+  last_error: string | null
+  result: Record<string, unknown> | null
+  created_at: string
+  finished_at: string | null
+  run_after: string
+}
+
+export interface CoverageRequest {
+  cell: string
+  lat: number
+  lng: number
+  label: string | null
+  requests: number
+  last_requested_at: string
+}
+
+export interface PipelineOverview {
+  jobs: Partial<Record<PipelineJob['status'], number>>
+  recentJobs: PipelineJob[]
+  budgets: PipelineBudget[]
+  pendingFindings: number
+  openDuplicates: number
+  coverageRequests: CoverageRequest[]
+  markets: { id: string; name: string; lastDiscoveredAt: string | null; nextDiscoveryAt: string | null; discoveryEnabled: boolean; radiusMiles: number; places: number }[]
+}
+
+export interface Finding {
+  id: string
+  establishment_id: string
+  establishmentName: string
+  establishmentSlug: string
+  managedBy: 'auto' | 'admin'
+  source_kind: string
+  method: string
+  source_url: string | null
+  windows: Omit<HappyHourWindow, 'id'>[]
+  specials: Omit<Special, 'id'>[]
+  restrictions: string[]
+  evidence: { field: string; quote: string }[]
+  source_published_at: string | null
+  checked_at: string
+  confidence: number | null
+  mentioned_but_unparsed: boolean
+  status: 'pending' | 'applied' | 'rejected' | 'approved' | 'superseded'
+  decision_reason: string | null
+  created_at: string
+}
+
+export interface DuplicateSide {
+  id: string
+  name: string
+  slug: string
+  address: string
+  website: string | null
+  status: string
+  origin: string
+  visits: number
+}
+
+export interface DuplicatePair {
+  id: string
+  score: number
+  reasons: string[]
+  createdAt: string
+  a: DuplicateSide
+  b: DuplicateSide
+}
+
+export interface ListingHistory {
+  changes: { id: string; actor: 'pipeline' | 'admin'; summary: string; source_url: string | null; created_at: string }[]
+  jobs: PipelineJob[]
+  documents: { url: string; outcome: string | null; last_status: number | null; last_attempt_at: string | null; last_success_at: string | null; failures: number }[]
+  externalIds: { provider: string; external_id: string; last_seen_at: string }[]
+  /** Internal pipeline state (admin only). */
+  listing: {
+    managedBy: 'auto' | 'admin'
+    origin: 'manual' | 'import' | 'user_submission'
+    confidence: number | null
+    conflict: boolean
+    lockedFields: string[]
+    attribution: string | null
+    lastConfirmedAt: string | null
+    lastChangedAt: string | null
+    nextEnrichAt: string | null
+    lastEnrichAttemptAt: string | null
+    lastEnrichSuccessAt: string | null
+    enrichFailures: number
+    mergedInto: string | null
+  } | null
+}
+
+export interface MarketInput {
+  id?: string
+  slug: string
+  name: string
+  region: string
+  lat: number
+  lng: number
+  timezone: string
+  radiusMiles: number
+  autoPublish: boolean
+  coverageCell?: string
+}
+
+export interface PipelineAdminApi {
+  overview(): Promise<PipelineOverview>
+  listFindings(status: 'pending' | 'all', establishmentId?: string): Promise<Finding[]>
+  reviewFinding(id: string, action: 'approve' | 'reject', note: string | null): Promise<void>
+  setManagedBy(establishmentId: string, managedBy: 'auto' | 'admin'): Promise<void>
+  listDuplicates(): Promise<DuplicatePair[]>
+  resolveDuplicate(id: string, action: 'merge' | 'dismiss'): Promise<void>
+  mergeEstablishments(keepId: string, mergeId: string): Promise<void>
+  enqueueRefresh(kind: PipelineJob['kind'], targetId: string): Promise<void>
+  /** Ask the Worker to run queued jobs now; false when that endpoint is unavailable (they run on the next schedule). */
+  runNow(): Promise<boolean>
+  setProviderLimit(provider: string, monthlyLimit: number, enabled: boolean): Promise<void>
+  saveMarket(input: MarketInput): Promise<string>
+  dismissCoverage(cell: string): Promise<void>
+  history(establishmentId: string): Promise<ListingHistory>
+}
+
 export interface AdminApi {
+  pipeline: PipelineAdminApi
   stats(): Promise<AdminStats>
   listEstablishments(): Promise<Establishment[]>
   saveEstablishment(input: EstablishmentInput): Promise<string>

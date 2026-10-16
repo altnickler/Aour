@@ -74,6 +74,9 @@ const MARKET: Market = {
   areas: ['Downtown Stuart', 'Stuart', 'Palm City', 'Jensen Beach', 'Hutchinson Island', "Sewall's Point", 'Port Salerno', 'Hobe Sound'],
 }
 
+const demoOnly = (): never => {
+  throw new ApiError('The automated data pipeline runs only with the Supabase backend (see DEPLOYMENT.md).', 'demo')
+}
 const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString()
 const dateAgo = (days: number) => iso(days * DAY).slice(0, 10)
 const id = () => crypto.randomUUID()
@@ -761,6 +764,22 @@ export class DemoApi implements Api {
 
   // Admin --------------------------------------------------------------------------------
   admin: AdminApi = {
+    // The automated pipeline needs the real backend; the demo shows an empty, clearly-labelled state.
+    pipeline: {
+      overview: async () => ({ jobs: {}, recentJobs: [], budgets: [], pendingFindings: 0, openDuplicates: 0, coverageRequests: [], markets: [] }),
+      listFindings: async () => [],
+      reviewFinding: async () => demoOnly(),
+      setManagedBy: async () => demoOnly(),
+      listDuplicates: async () => [],
+      resolveDuplicate: async () => demoOnly(),
+      mergeEstablishments: async () => demoOnly(),
+      enqueueRefresh: async () => demoOnly(),
+      runNow: async () => false,
+      setProviderLimit: async () => demoOnly(),
+      saveMarket: async () => demoOnly(),
+      dismissCoverage: async () => demoOnly(),
+      history: async () => ({ changes: [], jobs: [], documents: [], externalIds: [], listing: null }),
+    },
     stats: async () => {
       this.requireAdmin()
       const s = this.state

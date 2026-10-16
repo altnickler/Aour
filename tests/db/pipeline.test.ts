@@ -329,3 +329,28 @@ describe('merging duplicates', () => {
     expect(stats.reviewers).toBe(1)
   })
 })
+
+describe('internal pipeline signals stay private', () => {
+  it('the public cannot read confidence, fingerprints, crawl state or who verified a listing', async () => {
+    const id = await createEstablishment(pool, { name: 'Private Signals' })
+    await pool.query(`update public.establishments set hh_confidence = 0.42, hh_fingerprint = 'fp', hh_verified_by = $2 where id = $1`, [id, admin])
+    for (const who of [null, user]) {
+      await expect(as(pool, who, (c) => c.query(`select hh_confidence from public.establishments where id = $1`, [id]))).rejects.toThrow(/permission denied/)
+      await expect(as(pool, who, (c) => c.query(`select * from public.establishments where id = $1`, [id]))).rejects.toThrow(/permission denied/)
+      await expect(as(pool, who, (c) => c.query(`select hh_verified_by from public.establishments where id = $1`, [id]))).rejects.toThrow(/permission denied/)
+      const ok = await as(pool, who, (c) => c.query(`select name, hh_status, hh_restrictions, hh_last_confirmed_at from public.establishments where id = $1`, [id]))
+      expect(ok.rows[0].name).toBe('Private Signals')
+    }
+    // The nearby RPC returns full rows for embedding, but with internal columns blanked.
+    const near = await as(pool, null, (c) => c.query(`select * from public.nearby_establishments(27.19, -80.25, 2000, 500) where id = $1`, [id]))
+    expect(near.rows[0]).toMatchObject({ name: 'Private Signals', hh_confidence: null, hh_fingerprint: null, hh_verified_by: null, next_enrich_at: null })
+  })
+
+  it('admins see the internals through the listing history RPC', async () => {
+    const id = await createEstablishment(pool, { name: 'Admin Internals' })
+    await pool.query(`update public.establishments set hh_confidence = 0.42, hh_managed_by = 'auto' where id = $1`, [id])
+    const h = await as(pool, admin, (c) => c.query(`select public.admin_listing_history($1) as h`, [id]).then((r) => r.rows[0].h))
+    expect(h.listing).toMatchObject({ managedBy: 'auto', confidence: 0.42 })
+    await expect(as(pool, user, (c) => c.query(`select public.admin_listing_history($1)`, [id]))).rejects.toThrow()
+  })
+})
