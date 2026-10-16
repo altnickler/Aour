@@ -5,6 +5,7 @@
  *   npx tsx scripts/maintenance.ts reclassify     # DRY RUN: what the strict classifier would change
  *   npx tsx scripts/maintenance.ts reclassify --apply
  *   npx tsx scripts/maintenance.ts robots         # READ-ONLY: venue domains robots.txt keeps us out of, and why
+ *   npx tsx scripts/maintenance.ts robots --probe # …plus one request per problem domain to show the real error
  *
  * reclassify re-reads the market from Overture with the current classifier and, for imported
  * listings it no longer accepts, sets status = 'archived' (reversible; nothing is deleted) — only
@@ -201,6 +202,38 @@ async function robots() {
   }
   console.log('\nSummary:')
   for (const [k, n] of [...tally].sort((a, b) => b[1] - a[1])) console.log(`  ${n}  ${k}`)
+
+  // --probe: one robots.txt GET and one homepage GET per problem domain (no database writes), to
+  // show the real network error or which anti-bot marker matched.
+  if (!process.argv.includes('--probe')) return
+  console.log('\nProbe (one request each, AourBot user agent):')
+  const problem = rows.filter((r) => r.blocked || (r.robots_status ?? 0) >= 500)
+  const describe = (e: unknown) => {
+    const err = e as Error & { cause?: { code?: string; message?: string } }
+    return `${err.name}: ${err.message}${err.cause ? ` (cause: ${err.cause.code ?? ''} ${err.cause.message ?? ''})` : ''}`
+  }
+  const get = (url: string) => fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,text/plain;q=0.9,*/*;q=0.1' }, redirect: 'manual', signal: AbortSignal.timeout(15_000) })
+  for (const r of problem) {
+    const out: string[] = []
+    try {
+      const res = await get(`https://${r.domain}/robots.txt`)
+      out.push(`robots ${res.status}`)
+      await res.body?.cancel().catch(() => {})
+    } catch (e) {
+      out.push(`robots FAILED ${describe(e)}`)
+    }
+    try {
+      const res = await get(`https://${r.domain}/`)
+      const body = res.status >= 300 && res.status < 400 ? '' : await res.text()
+      const title = /<title[^>]*>([^<]{0,80})/i.exec(body)?.[1]?.trim() ?? ''
+      const markers = ['cf-mitigated header', 'just a moment', 'attention required', 'cf-chl-', 'cf_chl_opt', 'challenge-platform', 'g-recaptcha', 'hcaptcha.com', 'captcha-delivery.com', 'px-captcha', 'perimeterx', 'datadome']
+        .filter((m) => (m === 'cf-mitigated header' ? res.headers.get('cf-mitigated') === 'challenge' : body.toLowerCase().includes(m)))
+      out.push(`home ${res.status}${res.headers.get('location') ? ` -> ${res.headers.get('location')}` : ''}, ${body.length} bytes, server ${res.headers.get('server') ?? '?'}, title "${title}", markers [${markers.join(', ')}]`)
+    } catch (e) {
+      out.push(`home FAILED ${describe(e)}`)
+    }
+    console.log(`${r.blocked ? 'BLOCKED' : 'UNAVAILABLE'} ${r.domain}\n    ${out.join('\n    ')}`)
+  }
 }
 
 const tasks: Record<string, () => Promise<void>> = { diagnose, reclassify, robots }
