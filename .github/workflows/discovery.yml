@@ -1,0 +1,39 @@
+name: Discovery
+
+# Market discovery from Overture Maps (DuckDB reads only each market's bounding box from the
+# public GeoParquet release). Runs daily; only markets whose next_discovery_at is due do work
+# (weekly per market), so most runs finish in seconds. Enrichment runs in the Worker cron.
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: discover (venues) or enrich (website happy-hour refresh)
+        default: discover
+
+concurrency:
+  group: discovery
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OVERTURE_RELEASE: ${{ vars.OVERTURE_RELEASE }}
+      DISCOVERY_SOURCES: ${{ vars.DISCOVERY_SOURCES || 'overture' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Run pipeline
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY != '' }}
+        run: npm run pipeline -- "${{ github.event.inputs.mode || 'discover' }}"
+      - name: Not configured
+        if: ${{ env.SUPABASE_SERVICE_ROLE_KEY == '' }}
+        run: echo "::warning::SUPABASE_SERVICE_ROLE_KEY is not set for the production environment; discovery skipped (see DEPLOYMENT.md)."

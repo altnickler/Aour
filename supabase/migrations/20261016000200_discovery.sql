@@ -366,8 +366,8 @@ begin
                    when origin = 'import' then coalesce(c ->> 'phone', phone) else coalesce(phone, c ->> 'phone') end,
       postal_code = coalesce(postal_code, c ->> 'postalCode'),
       business_hours = case when 'business_hours' = any(locked_fields) then business_hours
-                            else coalesce(c -> 'businessHours', business_hours) end,
-      business_hours_source = case when c -> 'businessHours' is not null and not ('business_hours' = any(locked_fields))
+                            else coalesce(nullif(c -> 'businessHours', 'null'::jsonb), business_hours) end,
+      business_hours_source = case when nullif(c -> 'businessHours', 'null'::jsonb) is not null and not ('business_hours' = any(locked_fields))
                                    then c ->> 'attribution' else business_hours_source end,
       attribution = case when attribution is null then c ->> 'attribution'
                          when position(c ->> 'attribution' in attribution) > 0 then attribution
@@ -414,8 +414,8 @@ begin
     case when v_decision = 'review' or not m.auto_publish then 'draft'::public.listing_status else 'published'::public.listing_status end,
     'import',
     c ->> 'attribution',
-    c -> 'businessHours',
-    case when c -> 'businessHours' is not null then c ->> 'attribution' end,
+    nullif(c -> 'businessHours', 'null'::jsonb),
+    case when nullif(c -> 'businessHours', 'null'::jsonb) is not null then c ->> 'attribution' end,
     now()
   ) returning id into new_id;
 
@@ -607,16 +607,37 @@ language sql security definer set search_path = '' as $$
 $$;
 
 -- After an enrichment attempt: schedule the next one (backoff computed in core/ingest/refresh.ts).
+-- p_ok: true = success, false = failure (counts toward backoff), null = deferred (rate limit / politeness).
 create function public.pipeline_schedule_establishment(p_establishment uuid, p_ok boolean, p_next_at timestamptz)
 returns void
 language sql security definer set search_path = '' as $$
   update public.establishments set
     last_enrich_attempt_at = now(),
     last_enrich_success_at = case when p_ok then now() else last_enrich_success_at end,
-    enrich_failures = case when p_ok then 0 else enrich_failures + 1 end,
+    enrich_failures = case when p_ok then 0 when not p_ok then enrich_failures + 1 else enrich_failures end,
     next_enrich_at = p_next_at
   where id = p_establishment
 $$;
+
+create function public.pipeline_get_market(p_market uuid) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object('id', id, 'name', name, 'lat', lat, 'lng', lng, 'radiusMiles', radius_miles,
+                            'timezone', timezone, 'discoveryEnabled', discovery_enabled and is_active)
+  from public.markets where id = p_market
+$$;
+
+-- The venue's site no longer mentions happy hour: auto-managed info becomes "outdated" (never deleted).
+create function public.pipeline_mark_outdated(p_establishment uuid, p_reason text) returns boolean
+language plpgsql security definer set search_path = '' as $$
+begin
+  update public.establishments set hh_status = 'outdated', hh_checked_at = now()
+   where id = p_establishment and hh_managed_by = 'auto' and hh_status not in ('none', 'outdated');
+  if found then
+    insert into public.listing_changes (establishment_id, actor, summary)
+    values (p_establishment, 'pipeline', left('Marked outdated: ' || p_reason, 300));
+  end if;
+  return found;
+end $$;
 
 -- Atomically spend from a provider's monthly budget. false = disabled or exhausted.
 create function public.pipeline_consume_budget(p_provider text, p_units integer default 1)
@@ -649,7 +670,8 @@ begin
   insert into public.refresh_jobs (kind, target_id, priority)
   select 'enrich_establishment', e.id, e.enrich_priority
   from public.establishments e
-  where e.status = 'published' and e.website is not null
+  -- Drafts are enriched too, so admins see what a venue publishes before approving it.
+  where e.status in ('published', 'draft') and e.website is not null
     and coalesce(e.next_enrich_at, '-infinity') <= now()
     and not exists (select 1 from public.refresh_jobs j where j.kind = 'enrich_establishment' and j.target_id = e.id and j.status in ('queued', 'running'))
   order by e.enrich_priority desc, e.next_enrich_at nulls first
@@ -1112,6 +1134,7 @@ grant execute on function
   public.pipeline_claim_jobs(text, integer, text[]),
   public.pipeline_finish_job(uuid, text, text, jsonb, timestamptz),
   public.pipeline_mark_market_discovered(uuid, boolean),
+  public.pipeline_get_market(uuid), public.pipeline_mark_outdated(uuid, text),
   public.aour_slug_available(text)
 to service_role;
 grant select on public.markets, public.establishments to service_role;

@@ -27,7 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        # PostGIS is required by the discovery migrations (Supabase ships it as an extension).
+        image: postgis/postgis:17-3.5
         env: { POSTGRES_PASSWORD: postgres }
         ports: ['5432:5432']
         options: >-

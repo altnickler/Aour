@@ -1,12 +1,26 @@
-// Cloudflare Workers — static assets only (no Worker code runs, so requests are free and unlimited).
-// Deploy: `npm run deploy` (or the GitHub Actions workflow). Docs: DEPLOYMENT.md
+// Cloudflare Worker: serves the PWA from static assets and runs the scheduled data pipeline.
+// Only /api/* executes Worker code; every other request is a free static-asset hit.
+// Deploy: `npm run deploy` (or the GitHub Actions workflow). Secrets & plan: DEPLOYMENT.md
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "aour",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     // Client-side routing: unknown paths serve index.html.
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // One bounded pipeline tick every 15 minutes (enrichment). Market discovery with Overture
+  // runs in GitHub Actions (.github/workflows/discovery.yml) because it needs DuckDB.
+  "triggers": { "crons": ["*/15 * * * *"] },
+  // Per-IP limit for /api/geocode (Workers Rate Limiting binding).
+  "ratelimits": [{ "name": "GEOCODE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
+  "vars": {
+    "PIPELINE_ENABLED": "true",
+    "WORKER_DISCOVERY": ""
+  },
+  "observability": { "enabled": true }
 }

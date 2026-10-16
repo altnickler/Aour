@@ -60,7 +60,24 @@ export function validateFinding(f: HappyHourFinding, sourceText?: string): Valid
     }
   }
 
-  const finding: HappyHourFinding = { ...f, windows, specials, mentionedButUnparsed: f.mentionedButUnparsed || (!windows.length && f.windows.length > 0) }
+  // Re-point evidence at the surviving facts' new indices; drop evidence for removed ones.
+  const remap = (field: string): string | null => {
+    const [kind, idx] = field.split(':')
+    if (kind === 'window') {
+      const i = windows.indexOf(f.windows[Number(idx)])
+      return i >= 0 ? `window:${i}` : null
+    }
+    if (kind === 'special') {
+      const i = specials.indexOf(f.specials[Number(idx)])
+      return i >= 0 ? `special:${i}` : null
+    }
+    return field
+  }
+  const evidence = f.evidence.flatMap((e) => {
+    const field = remap(e.field)
+    return field ? [{ ...e, field }] : []
+  })
+  const finding: HappyHourFinding = { ...f, windows, specials, evidence, mentionedButUnparsed: f.mentionedButUnparsed || (!windows.length && f.windows.length > 0) }
   return { ok: errors.length === 0, errors, finding }
 }
 

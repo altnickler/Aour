@@ -114,3 +114,21 @@ export async function asService<T>(pool: pg.Pool, fn: (c: pg.PoolClient) => Prom
     c.release()
   }
 }
+
+/**
+ * The pipeline's Rpc transport backed by this test database, executing as service_role —
+ * the same functions, grants and checks PostgREST would hit in Supabase.
+ */
+export function pgRpc(pool: pg.Pool) {
+  return (fn: string, args: Record<string, unknown>) =>
+    asService(pool, async (c) => {
+      if (!/^[a-z_]+$/.test(fn)) throw new Error(`bad function name ${fn}`)
+      const keys = Object.keys(args)
+      const { rows, fields } = await c.query(
+        `select * from public.${fn}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')})`,
+        keys.map((k) => args[k]),
+      )
+      if (fields.length === 1 && fields[0].name === fn) return rows[0]?.[fn] ?? null
+      return rows
+    })
+}
