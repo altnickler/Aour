@@ -142,10 +142,17 @@ async function main() {
 
   // 4. Pipeline internals (service role, read-only selects) -------------------------------------
   const svc = (path: string) => rest(path, SERVICE)
-  const all = async <T>(path: string): Promise<T[]> => {
-    const r = await svc(path)
-    if (!Array.isArray(r.body)) throw new Error(`${path.split('?')[0]}: ${JSON.stringify(r.body).slice(0, 200)}`)
-    return r.body as T[]
+  // The API returns at most 1,000 rows per request: page through everything.
+  const all = async <T>(path: string, maxRows = 50_000): Promise<T[]> => {
+    const rows: T[] = []
+    const base = path.replace(/&limit=\d+/, '')
+    for (let offset = 0; offset < maxRows; offset += 1000) {
+      const r = await svc(`${base}&limit=1000&offset=${offset}`)
+      if (!Array.isArray(r.body)) throw new Error(`${path.split('?')[0]}: ${JSON.stringify(r.body).slice(0, 200)}`)
+      rows.push(...(r.body as T[]))
+      if ((r.body as T[]).length < 1000) break
+    }
+    return rows
   }
   out('## Pipeline internals (service role, read-only)')
   try {
@@ -156,9 +163,10 @@ async function main() {
     const ids = await all<{ provider: string }>('establishment_external_ids?select=provider&limit=10000')
     out(`- Provider links: ${tally(ids, (x) => x.provider)}`)
     const jobs = await all<{ kind: string; status: string; attempts: number; last_error: string | null; created_at: string; finished_at: string | null; result: Record<string, unknown> | null }>(
-      'refresh_jobs?select=kind,status,attempts,last_error,created_at,finished_at,result&order=created_at.desc&limit=200',
+      'refresh_jobs?select=kind,status,attempts,last_error,created_at,finished_at,result&order=created_at.desc',
+      1000,
     )
-    out(`- Jobs (latest 200): ${tally(jobs, (j) => `${j.kind}/${j.status}`)}`)
+    out(`- Jobs (latest 1000): ${tally(jobs, (j) => `${j.kind}/${j.status}`)}`)
     for (const j of jobs.filter((x) => x.kind === 'discover_market').slice(0, 3)) {
       const r = j.result as { created?: number; updated?: number; createdForReview?: number; sources?: unknown } | null
       out(`  - discovery ${j.status} at ${j.finished_at ?? j.created_at}: created ${r?.created ?? '-'}, for review ${r?.createdForReview ?? '-'}, updated ${r?.updated ?? '-'}, sources ${JSON.stringify(r?.sources ?? null)}${j.last_error ? `, error: ${j.last_error}` : ''}`)
@@ -167,6 +175,9 @@ async function main() {
     for (const j of errors) out(`  - ⚠️ ${j.kind} ${j.status}: ${j.last_error}`)
     const findings = await all<{ status: string; method: string; source_kind: string }>('hh_findings?select=status,method,source_kind&limit=10000')
     out(`- Happy-hour findings: ${findings.length} — ${tally(findings, (f) => `${f.source_kind}/${f.method}/${f.status}`)}`)
+    const dups = await all<{ status: string }>('possible_duplicates?select=status&limit=10000')
+    out(`- **Awaiting admin review:** ${findings.filter((f) => f.status === 'pending').length} happy-hour findings, ${dups.filter((d) => d.status === 'open').length} possible duplicates (held as drafts)`)
+    out(`- **Verified by an admin:** ${est.filter((e) => e.hh_status === 'verified').length}; reported by venue website: ${est.filter((e) => e.hh_status === 'establishment_reported').length}; community reported: ${est.filter((e) => e.hh_status === 'community_reported').length}; needs verification: ${est.filter((e) => e.hh_status === 'unverified').length}`)
     const docs = await all<{ outcome: string | null }>('source_documents?select=outcome&limit=10000')
     out(`- Website pages checked: ${docs.length} — ${tally(docs, (d) => d.outcome ?? 'pending')}`)
     const limits = await all<{ provider: string; monthly_limit: number; enabled: boolean }>('provider_limits?select=provider,monthly_limit,enabled&order=provider')
