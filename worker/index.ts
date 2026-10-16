@@ -48,17 +48,20 @@ function pipelineConfigured(env: Env): boolean {
   return !!(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY)
 }
 
+/** Global fetch wrapped so it is never invoked with a foreign `this` (workerd: "Illegal invocation"). */
+const webFetch: typeof fetch = (input, init) => fetch(input, init)
+
 function tick(env: Env, worker: string, limit: number) {
   const rpc = supabaseRpc(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!)
   const store = createStore(rpc)
   const wanted = (env.WORKER_DISCOVERY ?? '').split(',').map((s) => s.trim())
   const sources: PlaceSource[] = []
-  if (wanted.includes('osm')) sources.push(overpassSource({ fetch }))
-  if (wanted.includes('foursquare') && env.FOURSQUARE_API_KEY) sources.push(foursquareSource({ fetch, apiKey: env.FOURSQUARE_API_KEY }))
+  if (wanted.includes('osm')) sources.push(overpassSource({ fetch: webFetch }))
+  if (wanted.includes('foursquare') && env.FOURSQUARE_API_KEY) sources.push(foursquareSource({ fetch: webFetch, apiKey: env.FOURSQUARE_API_KEY }))
   const kinds: Job['kind'][] = sources.length ? ['enrich_establishment', 'discover_market'] : ['enrich_establishment']
   const llm = env.ANTHROPIC_API_KEY ? createLlmExtractor({ client: anthropicClient(env.ANTHROPIC_API_KEY), store, model: env.ANTHROPIC_MODEL }) : null
   return runPipelineTick({
-    rpc, fetch, worker, kinds, sources, llm, limit, concurrency: 3,
+    rpc, fetch: webFetch, worker, kinds, sources, llm, limit, concurrency: 3,
     log: (msg, data) => console.log(JSON.stringify({ msg, data })),
   })
 }

@@ -11,11 +11,12 @@ import { USER_AGENT } from '../fetcher'
 export const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 
 export function overpassSource(opts: { fetch: typeof fetch; endpoint?: string; userAgent?: string }): PlaceSource {
+  const fetchImpl = opts.fetch // unbound: Workers reject opts.fetch(...)
   return {
     provider: 'osm',
     budgetKey: 'osm_overpass',
     async fetchCandidates(bbox) {
-      const res = await opts.fetch(opts.endpoint ?? OVERPASS_ENDPOINT, {
+      const res = await fetchImpl(opts.endpoint ?? OVERPASS_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': opts.userAgent ?? USER_AGENT },
         body: new URLSearchParams({ data: overpassQuery(bbox) }).toString(),

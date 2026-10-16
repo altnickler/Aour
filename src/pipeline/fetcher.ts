@@ -125,8 +125,10 @@ export function createFetcher(deps: FetcherDeps) {
   const ua = deps.userAgent ?? USER_AGENT
   const { store } = deps
 
+  // Call fetch unbound: Cloudflare Workers reject `deps.fetch(...)` ("Illegal invocation").
+  const fetchImpl = deps.fetch
   async function request(url: string, headers: Record<string, string>): Promise<Response> {
-    return deps.fetch(url, {
+    return fetchImpl(url, {
       method: 'GET',
       headers: { 'User-Agent': ua, ...headers },
       redirect: 'manual',

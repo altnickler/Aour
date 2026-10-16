@@ -14,6 +14,7 @@ export const FOURSQUARE_ENDPOINT = 'https://places-api.foursquare.com/places/sea
 export const FOURSQUARE_API_VERSION = '2025-06-17'
 
 export function foursquareSource(opts: { fetch: typeof fetch; apiKey: string; endpoint?: string }): PlaceSource {
+  const fetchImpl = opts.fetch // unbound: Workers reject opts.fetch(...)
   return {
     provider: 'foursquare',
     budgetKey: 'foursquare',
@@ -26,7 +27,7 @@ export function foursquareSource(opts: { fetch: typeof fetch; apiKey: string; en
         limit: '50',
         fields: 'fsq_place_id,name,latitude,longitude,categories,location,website,tel,date_closed',
       })
-      const res = await opts.fetch(`${opts.endpoint ?? FOURSQUARE_ENDPOINT}?${params}`, {
+      const res = await fetchImpl(`${opts.endpoint ?? FOURSQUARE_ENDPOINT}?${params}`, {
         headers: { Authorization: `Bearer ${opts.apiKey}`, 'X-Places-Api-Version': FOURSQUARE_API_VERSION, Accept: 'application/json' },
         signal: AbortSignal.timeout(30_000),
       })

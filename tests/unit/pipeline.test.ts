@@ -9,7 +9,9 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { DuckDBInstance } from '@duckdb/node-api'
 import { bboxAround } from '@/core/ingest/providers'
 import { newestRelease, overtureSource } from '@/pipeline/providers/overture'
-import { looksLikeChallenge, parseRetryAfter, sameSite } from '@/pipeline/fetcher'
+import { createFetcher, looksLikeChallenge, parseRetryAfter, sameSite } from '@/pipeline/fetcher'
+import { overpassSource } from '@/pipeline/providers/overpass'
+import type { MarketInfo, PipelineStore } from '@/pipeline/store'
 import { selectRelevantText, toFinding } from '@/pipeline/llm'
 import { retryDelayMs } from '@/pipeline/runner'
 import { supabaseRpc } from '@/pipeline/rest'
@@ -123,6 +125,28 @@ describe('fetcher helpers', () => {
   it('backs off failing jobs exponentially', () => {
     expect([1, 2, 3].map(retryDelayMs)).toEqual([300_000, 1_200_000, 4_800_000])
     expect(retryDelayMs(10)).toBe(12 * 3_600_000)
+  })
+
+  it('calls fetch unbound, as Cloudflare Workers require (no "Illegal invocation")', async () => {
+    // workerd throws when the global fetch is called with any `this` other than undefined/globalThis.
+    const strictFetch = function (this: unknown, input: RequestInfo | URL) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation: function called with incorrect `this` reference')
+      const url = String(input)
+      return Promise.resolve(url.endsWith('/robots.txt') ? new Response('User-agent: *\nAllow: /\n') : new Response('<html><title>Venue</title></html>', { headers: { 'content-type': 'text/html' } }))
+    } as typeof fetch
+    const state = new Map<string, Record<string, unknown>>()
+    const store = {
+      getDomain: async (d: string) => state.get(d) ?? null,
+      putDomain: async (d: string, v: Record<string, unknown>) => void state.set(d, { ...state.get(d), ...v }),
+      consumeBudget: async () => true,
+    } as unknown as PipelineStore
+    const r = await createFetcher({ store, fetch: strictFetch, sleep: async () => {} }).get('https://venue.example/')
+    expect(r.kind).toBe('ok')
+    const osm = overpassSource({ fetch: function (this: unknown) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(new Response(JSON.stringify({ elements: [] })))
+    } as typeof fetch })
+    await expect(osm.fetchCandidates(bboxAround(27.2, -80.25, 1), {} as MarketInfo)).resolves.toEqual([])
   })
 })
 
