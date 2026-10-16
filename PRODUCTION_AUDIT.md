@@ -1,5 +1,25 @@
 # Production audit
 
+## Live discovery results — 2026-10-16 (GitHub Actions, service role, read-only reports)
+
+- **Database:** all five migrations are applied, including `20261017000200_discovery_catchup.sql`. Internal columns are hidden from the public API. Status runs 38944876401 and later.
+- **Import (Overture):** 1,209 candidates in the 15-mile market; 1,002 listings created and 112 held as drafts for duplicate review (run 38940823710).
+  - The first classifier also let in non-venues: insurance agencies, bakeries and fast-food chains.
+  - After the strict classifier, the reversible clean-up archived 262 untouched listings and corrected the venue type of 28 (run 38942856202).
+  - Now: **752 published, 99 drafts, 263 archived. Nothing was deleted.**
+- **Happy hours** (venue websites; 772 pages checked):
+  - **25** places report a happy hour on their own website, and 2 more need verification.
+  - **0** are admin-verified. Only an admin can mark one verified.
+  - Within 5 miles: Stuart 10+, Palm City 8, Jensen Beach 10, Hobe Sound 0.
+- **Awaiting admin review:** 10 happy-hour findings (the website mentions a happy hour but no times could be read), and 112 possible duplicates.
+- **Website checks — problems found live and fixed:**
+  1. A robots.txt that failed to load was treated as "disallowed" for 30 days, which hit 65 domains. It is now a retried error, and nothing is crawled until robots.txt answers.
+  2. Cloudflare's page script was mistaken for a bot wall on normal pages. Genuine walls (about 20 domains) stay blocked.
+  3. The Worker cron called `fetch` with the wrong `this` ("Illegal invocation"), so only the GitHub runner could check websites.
+
+  Many remaining "unreachable" sites are dead domains (DNS not found) or have broken TLS certificates.
+- **Tools:** `maintenance.yml` tasks `robots` / `robots --probe` (read-only) and `robots --recheck [--apply]`.
+
 ## Live database check — project viqhsibrtdgcwoiitzgz (2026-10-16, via the read-only Production status workflow)
 
 Verified live through GitHub Actions run 38938999968:
