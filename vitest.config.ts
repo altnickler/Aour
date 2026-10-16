@@ -21,6 +21,16 @@ export default defineConfig({
           hookTimeout: 60_000,
         },
       },
+      {
+        extends: true,
+        // Read-only checks of a deployed site: SITE_URL=https://… (safe against production).
+        test: { name: 'smoke', include: ['tests/staging/smoke.test.ts'], environment: 'node', testTimeout: 30_000 },
+      },
+      {
+        extends: true,
+        // Writes throwaway data to a Supabase STAGING project; see the header of the test file.
+        test: { name: 'staging', include: ['tests/staging/supabase.test.ts'], environment: 'node', testTimeout: 60_000, hookTimeout: 60_000, fileParallelism: false },
+      },
     ],
   },
 })

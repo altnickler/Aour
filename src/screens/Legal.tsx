@@ -4,15 +4,17 @@ import { PageHeader } from '@/components/ui'
  * PLACEHOLDER legal pages. Have these reviewed by a lawyer before public launch and keep
  * them consistent with the App Store privacy "nutrition label" (see IOS_RELEASE_PLAN.md).
  */
-export default function LegalScreen({ doc }: { doc: 'privacy' | 'terms' }) {
+const TITLE = { privacy: 'Privacy policy', terms: 'Terms of service', bot: 'AourBot' } as const
+
+export default function LegalScreen({ doc }: { doc: 'privacy' | 'terms' | 'bot' }) {
   return (
     <div>
-      <PageHeader title={doc === 'privacy' ? 'Privacy policy' : 'Terms of service'} back />
+      <PageHeader title={TITLE[doc]} back />
       <article className="prose-sm space-y-4 px-5 pb-12 text-[15px] leading-relaxed text-espresso [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-extrabold [&_h2]:text-choc">
         <p className="rounded-tile bg-butter-soft p-3 text-sm text-choc">
           Draft placeholder — not yet reviewed by counsel. Last updated {new Date(2026, 9, 15).toLocaleDateString()}.
         </p>
-        {doc === 'privacy' ? <Privacy /> : <Terms />}
+        {doc === 'privacy' ? <Privacy /> : doc === 'bot' ? <Bot /> : <Terms />}
       </article>
     </div>
   )
@@ -25,7 +27,8 @@ function Privacy() {
       <ul className="list-disc space-y-1 pl-5">
         <li><b>Account:</b> your email address (for sign-in codes), username, display name, and optional photo, bio and home city.</li>
         <li><b>Your content:</b> ratings, tags, reviews, private notes, photos, lists, collections and follows.</li>
-        <li><b>Location:</b> only if you choose “Use my location”. It is rounded to about 1 km, used on your device to sort by distance, and never stored on our servers.</li>
+        <li><b>Location:</b> only if you choose “Use my location”. It is rounded to about 1 km, used on your device to find nearby places, and never stored on our servers. Nearby searches send that rounded point, not your exact position.</li>
+        <li><b>Place searches:</b> city or address searches pass through our server to a geocoding service (Photon, built on OpenStreetMap) and are not saved to your account. If we have no listings where you search and you tap “Bring Aour here”, we record only an area rounded to about 11 km, with no link to you.</li>
         <li><b>Usage:</b> privacy-friendly, cookie-free page analytics and error reports to keep the app working.</li>
       </ul>
       <h2>What others can see</h2>
@@ -55,6 +58,24 @@ function Terms() {
       <p>We may hide or remove content and suspend accounts that break these rules or abuse the service.</p>
       <h2>Contact</h2>
       <p>hello@aour.app</p>
+    </>
+  )
+}
+
+/** Public page for the user agent "AourBot/1.0 (+https://aour.app/bot)". */
+function Bot() {
+  return (
+    <>
+      <p>AourBot is Aour’s crawler. It reads a venue’s <b>own website</b> to keep its happy-hour times and specials up to date, so people visiting the venue have accurate information.</p>
+      <h2>How it behaves</h2>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>It obeys robots.txt, including rules for the user agent <code>AourBot</code> and <code>Crawl-delay</code>.</li>
+        <li>It requests at most one page every few seconds per site, and usually only the homepage and a happy-hour or specials page, every few weeks.</li>
+        <li>It never logs in, never solves CAPTCHAs and stops when a site rate-limits or blocks it.</li>
+        <li>It keeps only the facts (days, times, specials, prices and a short supporting quote), not copies of your pages or images.</li>
+      </ul>
+      <h2>Opting out</h2>
+      <p>Add <code>User-agent: AourBot</code> / <code>Disallow: /</code> to your robots.txt, or email <b>bot@aour.app</b>. Venue owners can also email us to correct or update their happy hour directly.</p>
     </>
   )
 }

@@ -1,0 +1,30 @@
+name: Staging integration
+
+# Runs the Supabase integration suite against the STAGING project (never production) and the
+# read-only smoke test against the staging site. Manual, because it writes (and then deletes)
+# throwaway users and one labelled test listing in staging.
+on:
+  workflow_dispatch:
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Supabase integration (staging)
+        run: npm run test:staging
+        env:
+          STAGING_SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          PRODUCTION_SUPABASE_URL: ${{ vars.PRODUCTION_SUPABASE_URL }}
+          STAGING_CONFIRM: i-understand-this-writes-test-data
+      - name: Smoke test (staging site)
+        if: ${{ vars.STAGING_SITE_URL != '' }}
+        run: npm run test:smoke
+        env:
+          SITE_URL: ${{ vars.STAGING_SITE_URL }}

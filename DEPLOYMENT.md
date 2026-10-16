@@ -55,13 +55,15 @@ npm run deploy                             # vite build + wrangler deploy (wrang
 
 Then in the Cloudflare dashboard, open **Workers & Pages → aour → Settings → Domains & Routes** and add the custom domain `aour.app`.
 
-- `wrangler.jsonc` deploys **static assets only**, with SPA fallback for client routes. No Worker code runs, so requests are free.
+- `wrangler.jsonc` deploys the PWA as static assets (SPA fallback for client routes) plus a small Worker (`worker/index.ts`).
+  - Only `/api/*` runs Worker code, so page views stay free.
+  - The Worker also runs the scheduled data pipeline (Cron Trigger every 15 min). See §7.
 - `public/_headers` sets the CSP and security headers. If you use a custom Supabase domain or another map provider, add it to `connect-src` / `img-src`.
 - Optional analytics: **Analytics & Logs → Web Analytics → Add site**. Copy the token into `VITE_CF_ANALYTICS_TOKEN`.
 
 ## 5. Automated deploys from GitHub
 
-`.github/workflows/ci.yml` runs on every PR and push. It covers typecheck, lint, unit tests, database/RLS tests against Postgres 17, and Playwright e2e plus accessibility on an iPhone viewport.
+`.github/workflows/ci.yml` runs on every PR and push. It covers typecheck, lint, unit tests, database/RLS tests against PostGIS 17, and Playwright e2e plus accessibility on an iPhone viewport.
 
 `.github/workflows/deploy.yml` runs after CI passes on `main`. It applies migrations, then builds and deploys. Configure the repository under **Settings → Secrets and variables → Actions**, using a `production` environment:
 
@@ -78,7 +80,15 @@ Then in the Cloudflare dashboard, open **Workers & Pages → aour → Settings �
 | `VITE_ENABLE_APPLE_SIGNIN` | variable | `true` / `false` |
 | `VITE_CF_ANALYTICS_TOKEN` | variable | optional |
 
-The deploy job refuses to ship if `VITE_SUPABASE_URL` is empty, so a demo-mode build can never reach production.
+The deploy job refuses to ship if `VITE_SUPABASE_URL` is empty, so a demo-mode build can never reach production. After deploying, it runs the read-only smoke test (`npm run test:smoke`) against `VITE_SITE_URL`.
+
+Additional `production` environment entries for the pipeline (§7):
+
+| Name | Kind | Value |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | secret | Service-role / `sb_secret_…` key, used **only** by the scheduled discovery workflow. Never a `VITE_` variable |
+| `OVERTURE_RELEASE` | variable | Overture release to read, e.g. `2026-09-17.0` (https://docs.overturemaps.org/release/latest/) |
+| `DISCOVERY_SOURCES` | variable | `overture` (default). Add `,osm` only after the ODbL review in DATA_SOURCES.md |
 
 ## Environment variables
 
@@ -103,7 +113,52 @@ The deploy job refuses to ship if `VITE_SUPABASE_URL` is empty, so a demo-mode b
   - Change weights, then check the ranking recalculates.
   - Follow an account; delete a test account.
 - [ ] Spend cap left **on** in Supabase billing.
-- [ ] Uptime check (e.g. Better Stack or a cron hitting `/`), and Supabase email alerts enabled.
+- [ ] Uptime check (e.g. Better Stack or a cron hitting `/api/health`), and Supabase email alerts enabled.
+- [ ] Staging integration suite green; production smoke test green (see §8).
+- [ ] Legal review of DATA_SOURCES.md items before enabling crawling, OSM or AI extraction in production.
+
+## 7. Data pipeline (discovery and refresh)
+
+Venue discovery and happy-hour refresh are automated, but they are not live until configured. Every step is safe to skip: without secrets, the Worker cron returns immediately and the discovery workflow logs "skipped".
+
+1. **Upgrade the Worker to Workers Paid ($5/mo).** The free plan's 10 ms CPU limit per cron run is too small for page parsing.
+2. **Set the Worker secrets** (never commit them; never prefix them with `VITE_`):
+
+   ```bash
+   npx wrangler secret put SUPABASE_URL               # https://<ref>.supabase.co
+   npx wrangler secret put SUPABASE_ANON_KEY          # public key; used to check admin rights on /api/admin/run
+   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY  # service-role / sb_secret_ key (server only)
+   # optional
+   npx wrangler secret put ANTHROPIC_API_KEY          # enables AI-assisted extraction (also enable the llm_extract budget)
+   npx wrangler secret put ANTHROPIC_MODEL            # defaults to claude-opus-5-5
+   npx wrangler secret put FOURSQUARE_API_KEY         # id-only linking; also enable the foursquare budget
+   ```
+
+   Variables in `wrangler.jsonc`:
+   - `PIPELINE_ENABLED` — set to `"false"` to pause the scheduler.
+   - `WORKER_DISCOVERY` — comma list `osm,foursquare`; empty by default, because Overture discovery runs in GitHub Actions.
+3. **Cron:** `*/15 * * * *` is declared in `wrangler.jsonc` and deployed with the Worker. Each tick:
+   - queues due work and downgrades stale data;
+   - claims at most 6 jobs, with no duplicate concurrent jobs;
+   - fetches politely within the monthly budgets.
+4. **Discovery from Overture:** `.github/workflows/discovery.yml` runs daily at 07:17 UTC. It also runs manually from **Actions → Discovery**. Only markets whose weekly discovery is due do work. It needs `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL` and `OVERTURE_RELEASE` in the `production` environment.
+5. **Markets:**
+   - The launch market exists from the migrations (radius 15 mi, discovery on, auto-publish on).
+   - New markets come from **Admin → Data pipeline → Coverage requests → Create market**. Auto-publish is off by default, so discovered venues wait as drafts.
+6. **Budgets:** review **Admin → Data pipeline → Jobs & budgets**. Defaults: 20k pages, 60 Overture queries and 30k geocodes per month; OSM, Foursquare and AI are off.
+7. **Rate limit:** `/api/geocode` uses the Workers Rate Limiting binding `GEOCODE_LIMITER` (30 requests/min per IP), declared in `wrangler.jsonc`.
+8. **Crawler page:** `https://aour.app/bot` explains AourBot and how to opt out. Keep `bot@aour.app` monitored.
+
+## 8. Staging and integration tests
+
+- Create a **separate** Supabase project for staging, and optionally a second Worker (e.g. `wrangler deploy --name aour-staging` with its own secrets).
+- Create a GitHub environment `staging` with:
+  - `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_ANON_KEY`, `STAGING_SITE_URL` and `PRODUCTION_SUPABASE_URL` (variables);
+  - `STAGING_SUPABASE_SERVICE_ROLE_KEY` (secret).
+- Run **Actions → Staging integration**. It creates throwaway users and one labelled test listing, verifies auth, ratings, weights, community scores, RLS, admin checks and uploads, then deletes everything it created. It refuses to run against the production URL.
+- `npm run test:smoke` with `SITE_URL=…` is read-only and safe against production.
+
+See PRODUCTION_AUDIT.md for what has and hasn't been verified on real infrastructure.
 
 ## Local development options
 

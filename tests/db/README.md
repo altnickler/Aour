@@ -10,4 +10,4 @@ Run locally with any Postgres 15+ superuser connection:
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npm run test:db
 ```
 
-Each test file creates and drops its own database (`aour_test_*`). CI runs these against `postgres:17`.
+Each test file creates and drops its own database (`aour_test_*`). CI runs these against `postgis/postgis:17-3.5` (the discovery migrations need PostGIS; locally: `apt install postgresql-16-postgis-3` or the same Docker image).

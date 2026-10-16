@@ -10,6 +10,8 @@ Postgres on Supabase. Everything is defined in versioned migrations in `supabase
 | `…0400_storage.sql` | Buckets and storage policies |
 | `…0500_admin_listing_rpc.sql` | Atomic `admin_save_establishment` |
 | `…0600_social_helpers.sql` | `my_following`, collection touch trigger |
+| `20261016000100_discovery_enums.sql` | New statuses `establishment_reported`, `community_reported`; source kinds `official_website`, `open_data` |
+| `20261016000200_discovery.sql` | PostGIS location + GiST index, provenance, findings, job queue, budgets, coverage, pipeline/admin RPCs, column-level privacy |
 
 `supabase/seed.sql` holds **demo data for local stacks only**. It's never pushed to production.
 
@@ -103,6 +105,69 @@ Admin (each checks `aour_require_admin()` and logs to `moderation_actions`):
 Rating SQL: `aour_composite(scores jsonb, weights jsonb)` and `aour_refresh_establishment_stats(id)`, which statement-level triggers on `visits`, `rating_scores`, `visit_tags` and `profiles` call automatically.
 
 Deny-by-default: `revoke execute on all functions … from public, anon, authenticated`, then explicit grants. Internal helpers (stats refresh, audit log, review JSON) are not callable by clients.
+
+## Discovery pipeline schema (`…20261016000200_discovery.sql`)
+
+New columns on `establishments`:
+
+- **Location:** `location` (generated PostGIS geography, GiST index).
+- **Provenance and hours:** `origin` (`manual`/`import`/`user_submission`), `attribution`, `business_hours` (opening hours, not happy hour).
+- **Happy-hour source:** `hh_source_url`, `hh_source_published_at`, `hh_last_confirmed_at`, `hh_last_changed_at`, `hh_restrictions`.
+- **Internal:** `hh_confidence`, `hh_conflict`, `hh_fingerprint`, `hh_managed_by` (`auto`/`admin`), `locked_fields`, plus scheduling fields `next_enrich_at`, `enrich_failures`, `last_enrich_*`, and `merged_into`.
+
+New columns on `markets`: `radius_miles`, `discovery_enabled`, `auto_publish`, `last_discovered_at`, `next_discovery_at`.
+
+| Table | Purpose |
+|---|---|
+| `establishment_external_ids` | Stable provider IDs (Overture GERS, OSM `node/123`, Foursquare id) → listing |
+| `possible_duplicates` | Imports that resemble an existing listing, for admin merge or dismiss |
+| `source_documents` | Pages fetched per listing: ETag / Last-Modified / content hash, attempt and success times, failures |
+| `source_domains` | Per-host robots.txt cache, Crawl-delay, politeness window, sticky blocks |
+| `hh_findings` | Every extraction with evidence quotes, confidence and status (`pending`/`applied`/`approved`/`rejected`/`superseded`) |
+| `listing_changes` | Refresh history: who changed what (pipeline or admin) and from which source |
+| `refresh_jobs` | Job queue. A unique partial index allows one active job per target |
+| `provider_limits`, `provider_usage` | Monthly budgets per external provider |
+| `coverage_requests` | Anonymous demand by ~11 km cell |
+
+**Access:**
+
+- All pipeline tables are **admin-read-only** for clients.
+- Writes happen only through RPCs:
+  - `pipeline_*` RPCs are granted to `service_role` only;
+  - `admin_*` RPCs check `aour_require_admin()`.
+- `establishments` uses **column-level `select` grants**. Confidence, fingerprints, crawl state, locks, `hh_verified_by` and `created_by` are not readable through the public API. `nearby_establishments` blanks those columns, and admins read them via `admin_listing_history`.
+
+**Public RPCs:**
+
+| Function | Returns |
+|---|---|
+| `nearby_establishments(lat, lng, radius_m, limit)` | Published places within ≤ 50 mi, nearest first, using the GiST index. Returns table rows so PostgREST can embed schedules, specials and stats |
+| `request_coverage(lat, lng, label)` | Records an anonymous ~11 km demand signal; returns whether an active market already covers it |
+
+**Pipeline RPCs (service role):**
+
+| Function | Purpose |
+|---|---|
+| `pipeline_enqueue_due(limit)` | Queue due enrichment and discovery, downgrade stale automated data, reclaim stuck jobs |
+| `pipeline_claim_jobs(worker, limit, kinds)` | `FOR UPDATE SKIP LOCKED` claim |
+| `pipeline_finish_job(...)` | Succeed, skip, or fail with a retry time (until `max_attempts`) |
+| `pipeline_consume_budget(provider, units)` | Atomic monthly budget spend |
+| `pipeline_get_market`, `pipeline_mark_market_discovered` | Market discovery state |
+| `pipeline_nearby_for_match`, `pipeline_upsert_place` | Matching inputs, then create/update/link with locks and storage rules. Foursquare is ID-only |
+| `pipeline_enrichment_target`, `pipeline_record_document`, `pipeline_record_finding`, `pipeline_mark_outdated`, `pipeline_schedule_establishment` | Enrichment state and results. Can never set `verified`; never overwrites admin-managed listings |
+| `pipeline_get_domain`, `pipeline_put_domain` | robots and politeness state. Blocks are sticky |
+
+**Admin RPCs:**
+
+- `admin_pipeline_overview`
+- `admin_list_findings`, `admin_review_finding` (approve → verified + admin-managed)
+- `admin_set_hh_managed` (lock, or hand back to automation)
+- `admin_merge_establishments`, `admin_list_duplicates`, `admin_resolve_duplicate`
+- `admin_enqueue_refresh`, `admin_set_provider_limit`
+- `admin_save_market`, `admin_dismiss_coverage`
+- `admin_listing_history`
+
+**Triggers:** admin edits lock the edited imported fields (`aour_lock_on_admin_edit`), and admin edits to windows or specials make the listing admin-managed (`aour_admin_manages_hh`).
 
 ## Working with migrations
 

@@ -57,3 +57,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+      - name: Smoke test the live site (read-only)
+        if: ${{ vars.VITE_SITE_URL != '' }}
+        run: npm run test:smoke
+        env:
+          SITE_URL: ${{ vars.VITE_SITE_URL }}

@@ -52,6 +52,7 @@ export const router = createBrowserRouter([
       { path: '/suggest', element: <SuggestScreen /> },
       { path: '/privacy', element: <LegalScreen doc="privacy" /> },
       { path: '/terms', element: <LegalScreen doc="terms" /> },
+      { path: '/bot', element: <LegalScreen doc="bot" /> },
       { path: '/admin/*', element: <AdminScreen /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

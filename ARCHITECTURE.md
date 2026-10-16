@@ -7,18 +7,25 @@
  ┌──────────────────────────────────────────────┐
  │ React 19 + React Router + TanStack Query     │
  │  screens/ ── data/hooks ── data/api (Api)    │
- │                 │            ├─ SupabaseApi  │──── HTTPS (anon key + user JWT) ────┐
- │  core/ (pure TS: rating, schedule, discovery)│                                     │
- │  Service worker (precache + image cache)     │                                     ▼
- └──────────────────────────────────────────────┘                   ┌──────────────────────────────┐
-          ▲ static files (free, unlimited)                          │ Supabase                     │
- ┌────────┴─────────────┐   tiles   ┌───────────────┐               │  Postgres 17 + RLS + RPCs    │
- │ Cloudflare Workers   │◀──────────│ OpenFreeMap   │               │  Auth (email OTP, Apple)     │
- │ static assets + CDN  │           │ (vector tiles)│               │  Storage (photos, CDN)       │
- └──────────────────────┘           └───────────────┘               └──────────────────────────────┘
+ │                 │            ├─ SupabaseApi  │──── HTTPS (anon key + user JWT) ──────────┐
+ │  core/ (pure TS: rating, schedule, discovery)│                                           │
+ │  Service worker (precache + image cache)     │                                           ▼
+ └──────────────────────────────────────────────┘                         ┌──────────────────────────────┐
+     ▲ static files (free)     │ /api/geocode, /api/admin/run              │ Supabase                     │
+ ┌───┴─────────────────────────▼────────────┐   service role (RPC only)   │  Postgres 17 + PostGIS + RLS │
+ │ Cloudflare Worker                        │────────────────────────────▶│  Auth (email OTP, Apple)     │
+ │  static assets + CDN (no code)           │                             │  Storage (photos, CDN)       │
+ │  /api/* + Cron Trigger (every 15 min)    │──▶ venue websites (polite)  └──────────────────────────────┘
+ │  pipeline: fetch → extract → assess      │──▶ Photon (geocoding)                   ▲
+ └──────────────────────────────────────────┘──▶ Claude API (optional)                  │ service role
+ ┌──────────────────────────────────────────┐                                          │
+ │ GitHub Actions (daily): Overture discovery│── DuckDB ──▶ Overture GeoParquet (S3) ──┘
+ └──────────────────────────────────────────┘
 ```
 
-There is no custom server. The browser talks straight to Supabase, and **every permission is enforced in Postgres** through row-level security, column grants and `SECURITY DEFINER` RPCs that check the caller. Cloudflare only serves static files.
+The browser talks straight to Supabase, and **every permission is enforced in Postgres** through row-level security, column grants and `SECURITY DEFINER` RPCs that check the caller.
+
+The Worker serves static files (no code runs for them). Its code handles `/api/*` and the scheduled pipeline. The pipeline reaches the database **only** through service-role RPCs (`pipeline_*`), which enforce budgets, locks and admin overrides in SQL.
 
 ## Key decisions
 
@@ -29,9 +36,9 @@ There is no custom server. The browser talks straight to Supabase, and **every p
 | Data fetching | TanStack Query | Caching, optimistic updates and request dedupe for ~13 kB. |
 | Backend | **Supabase** (Postgres, Auth, Storage) | Auth, RLS and storage are built in, so there's no server to write or maintain. Free tier to start, then $25/mo Pro. |
 | Not chosen | Cloudflare D1 + Workers | Cheap at rest, but D1 has no auth or row-level security, so we'd build and own JWT verification, authorization for every endpoint, storage and email auth. That's more code and more risk for a solo founder, for savings of about $0–25/month. |
-| Hosting | Cloudflare **Workers static assets** | Static requests are free and unlimited, with a global CDN. Cloudflare recommends Workers over Pages for new projects. |
+| Hosting | Cloudflare **Workers static assets** + a small Worker for `/api/*` and cron | Static requests are free and unlimited, with a global CDN. The Worker (Workers Paid, $5) runs the scheduled pipeline and the geocoding proxy. |
 | Maps | **MapLibre GL** + **OpenFreeMap** tiles | No API key, no usage fees, OSM attribution. Lazy-loaded on the Map screen only. Free tiers of MapTiler and Stadia forbid commercial use; Google/Mapbox bill per load. Swap via `VITE_MAP_STYLE_URL`. Directions link to Apple Maps (free, native on iPhone). |
-| Place data | **Our own establishment database**, entered and verified by admins | Google Places and Yelp terms forbid storing their content (place IDs only) and require their maps and branding. Scraping is out. Users can suggest places and report outdated details, and admins verify before publishing. |
+| Place data | **Our own establishment database**, seeded from **Overture Maps** (open licence) and enriched from venues' **own websites** | Google Places and Yelp terms forbid storing their content (place IDs only) and require their maps and branding. Scraping aggregators is out. OSM and Foursquare are opt-in (licensing). See DATA_SOURCES.md. |
 | Auth | Supabase **email one-time code** (+ magic link), optional **Sign in with Apple** | No passwords to store or reset. Codes work inside the installed PWA, where magic links would open Safari instead. |
 | Analytics | Cloudflare Web Analytics (optional token) | Free, cookie-free, no consent banner needed. |
 | Errors | Error boundary + console logging; Sentry free tier optional | Keeps the MVP dependency-light. Add `@sentry/react` when traffic justifies it. |
@@ -51,13 +58,60 @@ There is one canonical implementation. It's deterministic and fully unit-tested,
 
 Personal rankings are computed **on the client** from the user's visits. That's a few hundred rows at most, so weight changes re-rank instantly with no server round trip. Community stats are **server-maintained** in `establishment_stats` by statement-level triggers, so discovery reads one small row per place.
 
-## Discovery
+## Discovery (app)
 
-- A launch market has hundreds of listings at most. The app loads the whole market in **one cached request** (listings + schedules + specials + stats) and filters and sorts locally: instant filters and minimal database reads.
-- When a market passes ~1,500 listings, move `filterEstablishments` into an RPC with a bounding-box query (the lat/lng index already exists) or enable PostGIS.
-- "Happening now" uses the **establishment's time zone** (`Intl`), handles windows that cross midnight, and respects schedule exceptions.
-- **Freshness:** a listing is fresh if verified within 90 days, aging until 180, stale after that. Unverified and outdated listings show a warning; a happy hour is never shown as fact without a verification source.
-- Shelves (Happening now, Picked for you, Highest rated, Trending with friends, Best cocktails/value/food, Waterfront, Date night, Hidden gems, New) are pure functions in `core/discovery.ts`.
+- **Search centre** (`app/location.tsx`) is one of three things:
+  - the shared device location — coarsened to ~1 km, never stored or sent beyond the nearby query, and labelled "Near me";
+  - a searched city or address (`/api/geocode`);
+  - a launch market, labelled with its name.
+
+  The app never shows "Near me" unless the device location was actually shared.
+- **Radius** chips are 2/5/10/25/50 mi (default 5). Listings come from the `nearby_establishments` RPC: an indexed PostGIS `ST_DWithin` on a GiST geography index, nearest first, with schedules, specials and stats embedded. That is one cached request per centre and radius, so it works in any city, not just launch markets.
+- **Filters:**
+  - when: happening now, later today, tomorrow, this weekend (each in the venue's time zone; windows crossing midnight and dated exceptions handled);
+  - vibe: outdoor seating, waterfront, date night;
+  - verified only.
+- **Sorts:** best match, closest, best overall, drinks, food, value (Bayesian-smoothed category scores), ending soon.
+- **Cards** show distance, today's schedule, 1–2 real specials, community and personal scores, verification status and save.
+- **Candidates:** venues with no happy-hour facts (e.g. freshly discovered) are never mixed into results. They appear in a separate, collapsed "Other venues nearby — unconfirmed" section.
+- **Empty states:** where there is no coverage, users can widen the radius or send an anonymous "Bring Aour here" request (rounded to ~11 km). Admins turn those into markets.
+- **Place pages** separate **opening hours** (from licensed data) from **happy hour**, and show the source link, restrictions and attribution.
+- Shelves (Happening now, Picked for you, Highest rated, …) are pure functions in `core/discovery.ts`.
+
+## Data pipeline (`src/core/ingest`, `src/pipeline`, `worker/`)
+
+```
+markets due ─▶ discover_market job ─▶ Overture (DuckDB, GitHub Actions) / OSM (opt-in)
+                 └─ match (provider id → name + distance + website/phone) ─▶ create / update / draft + possible duplicate
+venues due ─▶ enrich_establishment job ─▶ robots.txt ─▶ polite conditional GET (homepage + ≤3 same-site pages)
+                 └─ extract (JSON-LD → text patterns, verbatim evidence) ─▶ validate ─▶ assess confidence
+                    └─ decide: apply | review | touch (unchanged) | discard ─▶ pipeline_record_finding
+                    └─ schedule next check (14–90 days; errors back off 1 h → 7 days)
+```
+
+- **Pure core** (`src/core/ingest/*`):
+  - matching, time parsing (OSM syntax and human text), extraction, validation, robots (RFC 9309), confidence, refresh scheduling;
+  - provider mappings.
+
+  All of it is unit-tested with fictional fixtures.
+- **Runtime** (`src/pipeline/*`):
+  - a typed store over service-role RPCs;
+  - the polite fetcher, enrichment, discovery and the job runner;
+  - the optional LLM extractor.
+
+  It runs unchanged in the Worker cron, the Node runner (`scripts/pipeline.ts`) and the tests, where it is backed by real Postgres.
+- **Job queue** (`refresh_jobs`):
+  - a unique partial index allows one active job per target, so ticks never duplicate work;
+  - jobs are claimed with `FOR UPDATE SKIP LOCKED`;
+  - failures retry with exponential backoff up to `max_attempts`;
+  - jobs stuck for more than 15 minutes are reclaimed.
+- **Budgets:** `pipeline_consume_budget` is a single conditional UPDATE, so concurrent workers can never overspend a monthly limit.
+- **Trust rules, enforced in SQL as well as TypeScript:**
+  - the pipeline can never set `verified`;
+  - it never overwrites an admin-managed listing (it files a pending finding instead);
+  - imported fields an admin edited are locked;
+  - automated info nobody re-confirmed for 180 days becomes `outdated`.
+- **Admin** (`/admin/data`): findings with evidence (approve & verify / reject), duplicates and merge, budgets, jobs, run-now, coverage requests to markets. Each listing has automation status, change history, sources checked and refresh-now.
 
 ## Security model
 
@@ -85,7 +139,8 @@ Personal rankings are computed **on the client** from the user's visits. That's 
 
 - Discover is eagerly loaded; every other screen is code-split. MapLibre (~280 kB gz) loads only on `/map` and is cached by the service worker on first use.
 - The production build drops the unused backend: the demo dataset never ships with Supabase builds.
-- One request per market for discovery, a 5-minute stale time, optimistic saves, and skeletons everywhere.
+- One indexed radius query per search centre, a 5-minute stale time, optimistic saves, and skeletons everywhere.
+- No external API call ever happens on page load. Geocoding runs only when a user types, and is edge-cached, rate-limited and budgeted.
 - Images use `loading="lazy"`, are compressed before upload, and are served from the Supabase CDN. The SW cache-first strategy keeps repeat views free.
 
 ## Native iOS path
@@ -101,4 +156,6 @@ Everything in `src/core` is framework-free TypeScript, and `src/data/api.ts` is 
 | Free Supabase projects pause after 7 days idle | Move to Pro ($25) at public launch, which also adds daily backups. |
 | OpenFreeMap has no SLA | The map screen degrades to a list. Switching providers is one env var (MapTiler Flex ~$25–30/mo). |
 | Apple rejects a thin web wrapper (4.2) | The native plan adds real native value: push for saved places, Sign in with Apple, widgets, offline. |
+| Automated happy-hour data is wrong or stale | Only deterministic extraction from the venue's own site is published automatically, labelled "Reported by venue" (not "Verified"). AI and conflicting results wait for review. Unconfirmed data decays to "Outdated", and users can report problems. |
+| Crawling disputes | robots.txt, rate limits, no evasion, a public `/bot` page with opt-out, never-crawl list for aggregators/social. Legal review items in DATA_SOURCES.md. |
 | Thin community at launch | The product is personal-first and useful with zero friends; shelves only appear when there's data. |
