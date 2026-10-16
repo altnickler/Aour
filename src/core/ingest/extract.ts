@@ -38,7 +38,7 @@ export function htmlToText(html: string): string {
       .replace(/<[^>]+>/g, ' '),
   )
     .split('\n')
-    .map((l) => l.replace(/[ \t ]+/g, ' ').trim())
+    .map((l) => l.replace(/[ \t\u00a0]+/g, ' ').trim())
     .filter(Boolean)
     .join('\n')
 }
