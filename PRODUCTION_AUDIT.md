@@ -1,5 +1,19 @@
 # Production audit
 
+## Live database check — project viqhsibrtdgcwoiitzgz (2026-10-16, via the read-only Production status workflow)
+
+Verified live through GitHub Actions run 38938999968:
+
+- **Deployment:** commit `f389983`, backend `supabase`; Worker `pipeline: true`, no missing settings.
+- **Migrations present:** core, storage/admin/social, discovery (PostGIS, markets) and automatic areas.
+- **Column privacy NOT in effect:** the public API could read internal columns. This indicates production applied an early draft of `20261016000200_discovery.sql`. Reproduced locally on that draft: **every Overture venue without opening hours failed to import** (check-constraint violation).
+  - Fix: `20261017000200_discovery_catchup.sql`. It is idempotent and data-safe (only `CREATE OR REPLACE FUNCTION`, `GRANT`, `REVOKE`).
+  - Verified locally on the draft schema: import works, privacy applies, it is re-runnable, and 93 DB tests pass.
+- **Market:** "Stuart & Martin County" (15 mi radius) covers Stuart (0 mi), Palm City (2.2), Jensen Beach (4.2) and Hobe Sound (11.9). Discovery is on but has never run.
+- **Public nearby query:** 0 places near each of the four towns. Nothing has been imported yet.
+- **Not yet checked:** pipeline internals, because the `SUPABASE_SERVICE_ROLE_KEY` GitHub secret is not set.
+
+
 ## Live deployment audit — https://aour.mute-frost-03a9.workers.dev (2026-10-16, second pass)
 
 ### Verified live (evidence from GitHub)

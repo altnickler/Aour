@@ -99,7 +99,7 @@ async function main() {
   await probe('2026-10-15 core schema, RLS, rating engine', 'rating_categories?select=key&limit=1')
   await probe('2026-10-15 storage, admin & social helpers', 'rpc/featured_collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
   await probe('2026-10-16 discovery (PostGIS, pipeline, markets)', 'markets?select=radius_miles,discovery_enabled,next_discovery_at&limit=1')
-  await probe('2026-10-16 discovery: privacy of internal columns', 'establishments?select=hh_confidence&limit=1', undefined, true)
+  await probe('2026-10-17 discovery catch-up (privacy + venue-import fixes)', 'establishments?select=hh_confidence&limit=1', undefined, true)
   await probe('2026-10-17 automatic areas', 'markets?select=auto_created&limit=1')
   out()
 
