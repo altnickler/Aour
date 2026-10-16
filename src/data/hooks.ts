@@ -109,7 +109,9 @@ export function useGeocode(query: string) {
 }
 
 export function useRequestCoverage() {
-  return useMutation({ mutationFn: ({ center, label }: { center: LatLng; label: string | null }) => api.requestCoverage(center, label) })
+  return useMutation({
+    mutationFn: ({ center, label, timezone }: { center: LatLng; label: string | null; timezone?: string | null }) => api.requestCoverage(center, label, timezone ?? null),
+  })
 }
 
 export function usePlace(slug: string) {

@@ -28,7 +28,7 @@ function Privacy() {
         <li><b>Account:</b> your email address (for sign-in codes), username, display name, and optional photo, bio and home city.</li>
         <li><b>Your content:</b> ratings, tags, reviews, private notes, photos, lists, collections and follows.</li>
         <li><b>Location:</b> only if you choose “Use my location”. It is rounded to about 1 km, used on your device to find nearby places, and never stored on our servers. Nearby searches send that rounded point, not your exact position.</li>
-        <li><b>Place searches:</b> city or address searches pass through our server to a geocoding service (Photon, built on OpenStreetMap) and are not saved to your account. If we have no listings where you search and you tap “Bring Aour here”, we record only an area rounded to about 11 km, with no link to you.</li>
+        <li><b>Place searches:</b> city or address searches pass through our server to a geocoding service (Photon, built on OpenStreetMap) and are not saved to your account. If we have no listings near your location, or you tap “Bring Aour here”, we record only an area rounded to about 11 km and your device’s time zone, with no link to you. We may use it to start listing venues in that area.</li>
         <li><b>Usage:</b> privacy-friendly, cookie-free page analytics and error reports to keep the app working.</li>
       </ul>
       <h2>What others can see</h2>

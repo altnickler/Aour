@@ -41,7 +41,17 @@ describe.skipIf(!SITE)(`deployed site ${SITE ?? '(SITE_URL not set)'}`, () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
-    expect(Object.keys(body).sort()).toEqual(['ai', 'ok', 'pipeline', 'time'])
+    expect(Object.keys(body).sort()).toEqual(['ai', 'build', 'missing', 'ok', 'pipeline', 'time'])
+    // Report what is deployed and what is missing (names only) so failures are actionable.
+    console.info(`[smoke] build=${JSON.stringify(body.build)} pipeline=${body.pipeline} ai=${body.ai} missing=${JSON.stringify(body.missing)}`)
+  })
+
+  it('is a real production build, not demo mode', async () => {
+    const res = await get('/version.json')
+    expect(res.status).toBe(200)
+    const v = await res.json()
+    console.info(`[smoke] deployed commit ${v.commit} on ${v.branch} built by ${v.builtBy} at ${v.builtAt}`)
+    if (!process.env.SMOKE_ALLOW_DEMO) expect(v.backend).toBe('supabase')
   })
 
   it('validates geocoding input before spending anything', async () => {

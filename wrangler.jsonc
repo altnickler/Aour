@@ -18,6 +18,9 @@
   "triggers": { "crons": ["*/15 * * * *"] },
   // Per-IP limit for /api/geocode (Workers Rate Limiting binding).
   "ratelimits": [{ "name": "GEOCODE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
+  // Keep variables set in the Cloudflare dashboard (e.g. SUPABASE_URL) across deploys;
+  // without this, `wrangler deploy` removes any plain variable not listed below. Secrets are always kept.
+  "keep_vars": true,
   "vars": {
     "PIPELINE_ENABLED": "true",
     "WORKER_DISCOVERY": ""

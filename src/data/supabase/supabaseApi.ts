@@ -290,7 +290,7 @@ export class SupabaseApi implements Api {
   // Listings -----------------------------------------------------------------------
   async listMarkets(): Promise<Market[]> {
     const rows = check(await this.client.from('markets').select('*').order('name'))
-    return rows.map((m: Row) => ({ id: m.id, slug: m.slug, name: m.name, region: m.region, lat: m.lat, lng: m.lng, timezone: m.timezone, areas: m.areas, radiusMiles: m.radius_miles == null ? undefined : Number(m.radius_miles) }))
+    return rows.map((m: Row) => ({ id: m.id, slug: m.slug, name: m.name, region: m.region, lat: m.lat, lng: m.lng, timezone: m.timezone, areas: m.areas, radiusMiles: m.radius_miles == null ? undefined : Number(m.radius_miles), autoCreated: !!m.auto_created }))
   }
 
   async listEstablishments(marketId: string) {
@@ -341,8 +341,8 @@ export class SupabaseApi implements Api {
     return { results: body.results, attribution: body.attribution ?? null }
   }
 
-  async requestCoverage(center: LatLng, label: string | null) {
-    await this.rpc('request_coverage', { p_lat: center.lat, p_lng: center.lng, p_label: label })
+  async requestCoverage(center: LatLng, label: string | null, timezone: string | null = null) {
+    await this.rpc('request_coverage', { p_lat: center.lat, p_lng: center.lng, p_label: label, p_timezone: timezone })
   }
 
   async getEstablishment(slugOrId: string) {

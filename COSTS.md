@@ -50,6 +50,7 @@ Pricing was researched in October 2026 from official pricing pages. Re-check bef
 | `website_fetch` | 20,000 pages | on |
 | `overture` | 60 queries | on |
 | `geocode` | 30,000 | on |
+| `auto_market` | 3 new areas | on (each area adds ~1 Overture query/week and its venues' website checks) |
 | `osm_overpass` | 0 | off, until ODbL review |
 | `foursquare` | 0 | off |
 | `llm_extract` | 300 | off |

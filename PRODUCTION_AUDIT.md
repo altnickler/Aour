@@ -1,5 +1,78 @@
 # Production audit
 
+## Live deployment audit — https://aour.mute-frost-03a9.workers.dev (2026-10-16, second pass)
+
+### Verified live (evidence from GitHub)
+
+| Finding | Evidence |
+|---|---|
+| The repository has one branch, `claude/aour-happy-hour-app-pptgkb`; the head before this pass was `168d2af` | GitHub branch list |
+| The Worker was **not** deployed by `deploy.yml` | GitHub lists exactly one workflow run in the repository, and it is not a deploy. So the deployment came from `wrangler deploy` or Cloudflare Workers Builds, outside GitHub Actions. The deployed commit cannot be identified from GitHub |
+| **Discovery has never imported anything** | That one run was the scheduled `Discovery` run #1 (2026-10-16 12:22 UTC, commit `168d2af`). Its `Run pipeline` step was **skipped** and `Not configured` ran instead: the GitHub `production` environment has no `SUPABASE_SERVICE_ROLE_KEY`. No Overture import has happened |
+
+### Blocked — not verified
+
+- **The deployment itself.** This environment's egress proxy refuses `aour.mute-frost-03a9.workers.dev` (connect rejected). So none of these could be observed: the HTML, `/api/health`, rendering, navigation, location, the map, Supabase connectivity, migrations, auth, Worker logs, cron executions, or the database contents (imported establishments and verified schedules).
+- **Supabase and Cloudflare APIs.** Unreachable, and no credentials are available in this session.
+
+### Risks that apply to this deployment until checked
+
+- **Demo mode in production.**
+  - The cause: a dashboard or `wrangler` deploy bypasses `deploy.yml`'s "refuse demo build" guard. A build without `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` then serves fictional listings, demo sign-in (code 123456) and first-account-is-admin.
+  - Fixed in code: demo mode now refuses to run on public hostnames and shows "Aour is almost ready" instead.
+  - To check what is actually live: open `/version.json` and look for `"backend": "supabase"`.
+- **Worker secrets missing.** If they are missing, the cron pipeline and geocoding do nothing. `/api/health` now lists the names of any missing secrets.
+- **Dashboard variables wiped on deploy.** `wrangler deploy` used to remove plain variables set in the dashboard. Fixed: `keep_vars: true`.
+
+### Fixed in this pass (tested locally, not yet observed live)
+
+- `/version.json` (commit, branch, builder, backend mode) and `/api/health` reporting `build` and `missing`. These make it possible to identify the deployed commit and spot configuration gaps.
+- Demo-mode guard for public hostnames.
+- `keep_vars` in `wrangler.jsonc`.
+- Discovery picks the newest Overture release automatically, so `OVERTURE_RELEASE` is now optional.
+- **Automatic areas.** "Near me" with no nearby listings sends an anonymous coverage request (~11 km cell plus time zone). The pipeline turns it into a discovery area, capped by the `auto_market` budget (3/month), so venues near a user's real location get imported without an admin.
+- Smoke test checks the deployed build is not demo mode and logs the deployed commit.
+
+Local results:
+
+| Suite | Result |
+|---|---|
+| Unit | 100 passed |
+| Database | 93 passed |
+| e2e | 28 passed |
+| Smoke vs local Worker runtime | 7 passed |
+
+### To finish the live audit
+
+1. **Allow this cloud environment to reach the hosts.** Cloud environment menu → **Edit** → **Network access**: choose a broader level, or add these under **Allowed domains**:
+   - `aour.mute-frost-03a9.workers.dev`
+   - your Supabase host `<ref>.supabase.co`
+   - optionally `api.cloudflare.com`
+
+   Then run `SITE_URL=https://aour.mute-frost-03a9.workers.dev npm run test:smoke`. Steps: https://code.claude.com/docs/en/cloud-environments#network-access
+2. **Configure the GitHub `production` environment:**
+   - secret `SUPABASE_SERVICE_ROLE_KEY`;
+   - variable `VITE_SUPABASE_URL`.
+
+   Then run **Actions → Discovery** manually.
+3. **Configure the Cloudflare Worker:**
+   - build variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SITE_URL`;
+   - secrets `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`;
+   - the Workers Paid plan.
+
+   See DEPLOYMENT.md §4b and §7.
+4. **Apply migrations** to the production Supabase project, including `20261017000100_auto_markets.sql` (`supabase db push`).
+5. **Optional, for deeper verification:**
+   - a Cloudflare API token with Workers read access, to read deployments, cron history and logs;
+   - read-only access to the production database, to count imported venues.
+
+   Provide these as environment secrets, never in chat.
+
+---
+
+## First pass (before deployment)
+
+
 Audit date: 2026-10-16. Scope: Part 1 of the "Production audit & automated happy-hour discovery" brief.
 
 ## Bottom line

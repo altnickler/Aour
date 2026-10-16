@@ -278,7 +278,7 @@ export interface Api {
   /** City/address search. Only called when the user types; results are not stored. */
   geocode(query: string): Promise<{ results: GeoResult[]; attribution: string | null }>
   /** Anonymous "bring Aour here" signal for an area with no coverage (rounded to ~11 km). */
-  requestCoverage(center: LatLng, label: string | null): Promise<void>
+  requestCoverage(center: LatLng, label: string | null, timezone?: string | null): Promise<void>
   establishmentReviews(establishmentId: string, opts?: { followingOnly?: boolean; before?: string }): Promise<PublicReview[]>
 
   // Me -------------------------------------------------------------------------

@@ -81,6 +81,7 @@ export interface Assessed {
 
 export function createStore(rpc: Rpc) {
   return {
+    promoteCoverage: async (limit = 1) => Number(await rpc('pipeline_promote_coverage', { p_limit: limit })) || 0,
     enqueueDue: (limit = 50) => rpc('pipeline_enqueue_due', { p_limit: limit }) as Promise<{ enrich: number; discover: number; stale: number }>,
     claimJobs: (worker: string, limit: number, kinds: Job['kind'][]) =>
       rpc('pipeline_claim_jobs', { p_worker: worker, p_limit: limit, p_kinds: kinds }) as Promise<Job[]>,

@@ -354,3 +354,44 @@ describe('internal pipeline signals stay private', () => {
     await expect(as(pool, user, (c) => c.query(`select public.admin_listing_history($1)`, [id]))).rejects.toThrow()
   })
 })
+
+describe('automatic discovery areas from coverage requests', () => {
+  it('promotes a near-me request with a valid time zone into a capped, auto-created discovery area', async () => {
+    // Anonymous visitors in Chicago and in Denver (no/invalid time zone) find nothing.
+    await as(pool, null, (c) => c.query(`select public.request_coverage(41.8781, -87.6298, null, 'America/Chicago')`))
+    await as(pool, null, (c) => c.query(`select public.request_coverage(41.8790, -87.6301, null, 'America/Chicago')`))
+    await as(pool, null, (c) => c.query(`select public.request_coverage(39.7392, -104.9903, null, 'Not/AZone')`))
+    const cells = (await pool.query(`select cell, requests, timezone from public.coverage_requests where cell in ('41.9,-87.6', '39.7,-105.0') order by cell`)).rows
+    expect(cells).toEqual([
+      { cell: '39.7,-105.0', requests: 1, timezone: null },
+      { cell: '41.9,-87.6', requests: 2, timezone: 'America/Chicago' },
+    ])
+
+    // Anonymous users and admins cannot call the pipeline function directly.
+    await expect(as(pool, null, (c) => c.query(`select public.pipeline_promote_coverage(1)`))).rejects.toThrow(/permission denied/)
+
+    const created = await asService(pool, (c) => c.query(`select public.pipeline_promote_coverage(5) as n`).then((r) => r.rows[0].n))
+    expect(created).toBe(1) // Denver has no usable time zone
+    const m = (await pool.query(`select slug, timezone, radius_miles, auto_publish, discovery_enabled, is_active, auto_created from public.markets where slug = 'area-41p9-m87p6'`)).rows[0]
+    expect(m).toMatchObject({ timezone: 'America/Chicago', auto_publish: true, discovery_enabled: true, is_active: true, auto_created: true })
+    expect(Number(m.radius_miles)).toBe(10)
+    expect((await pool.query(`select status from public.coverage_requests where cell = '41.9,-87.6'`)).rows[0].status).toBe('activated')
+
+    // Now covered: new requests there are not recorded, and promotion is idempotent.
+    expect(await as(pool, null, (c) => c.query(`select public.request_coverage(41.88, -87.63, null, 'America/Chicago') as r`).then((r) => r.rows[0].r))).toBe(true)
+    expect(await asService(pool, (c) => c.query(`select public.pipeline_promote_coverage(5) as n`).then((r) => r.rows[0].n))).toBe(0)
+
+    // Discovery for the new area is queued on the next tick.
+    await asService(pool, (c) => c.query(`select public.pipeline_enqueue_due(0)`))
+    const job = (await pool.query(`select j.status from public.refresh_jobs j join public.markets m on m.id = j.target_id where m.slug = 'area-41p9-m87p6' and j.kind = 'discover_market'`)).rows
+    expect(job).toEqual([{ status: 'queued' }])
+  })
+
+  it('stops when the monthly auto_market budget is spent or disabled', async () => {
+    await as(pool, null, (c) => c.query(`select public.request_coverage(33.4484, -112.0740, null, 'America/Phoenix')`))
+    await pool.query(`update public.provider_limits set enabled = false where provider = 'auto_market'`)
+    expect(await asService(pool, (c) => c.query(`select public.pipeline_promote_coverage(5) as n`).then((r) => r.rows[0].n))).toBe(0)
+    await pool.query(`update public.provider_limits set enabled = true where provider = 'auto_market'`)
+    expect(await asService(pool, (c) => c.query(`select public.pipeline_promote_coverage(5) as n`).then((r) => r.rows[0].n))).toBe(1)
+  })
+})

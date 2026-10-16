@@ -42,6 +42,14 @@ const QUICK_TAGS: [string, string][] = [
   ['date-night', 'Date night'],
 ]
 
+function deviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  } catch {
+    return null
+  }
+}
+
 function greeting(now: Date) {
   const h = now.getHours()
   if (h < 11) return 'Good morning'
@@ -74,6 +82,23 @@ export default function DiscoverScreen() {
 
   const inRange = useMemo(() => filterEstablishments(listings.data ?? [], { ...DEFAULT_FILTERS, area }, ctx), [listings.data, area, ctx])
   const withInfo = useMemo(() => inRange.filter(hasHappyHourInfo), [inRange])
+
+  // Nothing near the user's real location: tell Aour (anonymously, ~11 km cell, at most daily)
+  // so venue discovery can start there automatically.
+  const coverageMutate = coverage.mutate
+  const emptyNearDevice = center?.kind === 'device' && listings.isSuccess && !listings.isPlaceholderData && inRange.length === 0
+  useEffect(() => {
+    if (!emptyNearDevice || !center) return
+    const key = `aour-coverage-${center.point.lat.toFixed(1)},${center.point.lng.toFixed(1)}`
+    try {
+      const last = Number(localStorage.getItem(key) ?? 0)
+      if (Date.now() - last < 86_400_000) return
+      localStorage.setItem(key, String(Date.now()))
+    } catch {
+      /* storage unavailable: still send once per page view */
+    }
+    coverageMutate({ center: center.point, label: null, timezone: deviceTimeZone() })
+  }, [emptyNearDevice, center, coverageMutate])
   const candidates = useMemo(() => sortEstablishments(inRange.filter((e) => !hasHappyHourInfo(e)), 'distance', ctx), [inRange, ctx])
   const filters: DiscoveryFilters = { ...DEFAULT_FILTERS, when, tags, verifiedOnly }
   const filtering = when !== 'any' || tags.length > 0 || verifiedOnly || sort !== 'recommended'
@@ -226,7 +251,9 @@ export default function DiscoverScreen() {
                   body={
                     inRange.length
                       ? `We know ${inRange.length} ${inRange.length === 1 ? 'venue' : 'venues'} within ${radiusMiles} mi, but none with confirmed happy-hour information.`
-                      : `We don't have listings within ${radiusMiles} mi. Try a wider radius, or tell us you'd like Aour here.`
+                      : center.kind === 'device'
+                        ? `We don't have listings within ${radiusMiles} mi yet. We've noted this area (anonymously) so venue discovery can start here. Try a wider radius meanwhile.`
+                        : `We don't have listings within ${radiusMiles} mi. Try a wider radius, or tell us you'd like Aour here.`
                   }
                   action={
                     <div className="flex flex-wrap justify-center gap-2">
@@ -242,7 +269,7 @@ export default function DiscoverScreen() {
                           disabled={coverage.isSuccess}
                           onClick={() =>
                             coverage.mutate(
-                              { center: center.point, label: center.kind === 'place' ? center.label : null },
+                              { center: center.point, label: center.kind === 'place' ? center.label : null, timezone: center.kind === 'device' ? deviceTimeZone() : null },
                               { onSuccess: () => toast(`Thanks! We'll use this to decide where Aour goes next.`) },
                             )
                           }

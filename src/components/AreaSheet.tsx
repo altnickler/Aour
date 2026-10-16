@@ -53,11 +53,11 @@ export function AreaSheet({ open, onClose }: { open: boolean; onClose: () => voi
           {center && <p className="mt-2 text-xs text-muted">Currently: {center.kind === 'device' ? 'near you' : center.label}</p>}
         </div>
 
-        {markets.length > 0 && (
+        {markets.some((m) => !m.autoCreated) && (
           <div>
             <h3 className="mb-2 text-sm font-bold text-muted uppercase">Launch cities</h3>
             <div className="flex flex-wrap gap-2">
-              {markets.map((m) => (
+              {markets.filter((m) => !m.autoCreated).map((m) => (
                 <Chip key={m.id} selected={center?.kind === 'market' && m.id === market?.id} onClick={() => setMarket(m.slug)}>
                   {m.name}
                 </Chip>

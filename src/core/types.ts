@@ -21,6 +21,8 @@ export interface Market {
   areas: string[]
   /** Coverage radius around the centre. */
   radiusMiles?: number
+  /** Created automatically from coverage requests (not a curated launch city). */
+  autoCreated?: boolean
 }
 
 export interface Special {

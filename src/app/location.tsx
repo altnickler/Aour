@@ -99,7 +99,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }, [stored])
 
   const list = useMemo(() => markets.data ?? [], [markets.data])
-  const chosenMarket = list.find((m) => m.slug === stored.marketSlug) ?? list[0]
+  // The default view is a curated launch city, never an automatically created area.
+  const chosenMarket = list.find((m) => m.slug === stored.marketSlug) ?? list.find((m) => !m.autoCreated) ?? list[0]
 
   const center = useMemo<SearchCenter | null>(() => {
     if (origin) return { kind: 'device', point: origin, label: 'Near me' }

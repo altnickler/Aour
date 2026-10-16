@@ -63,6 +63,26 @@ function tick(env: Env, worker: string, limit: number) {
   })
 }
 
+/** Liveness, deployed build and configuration gaps — names of missing settings only, never values. */
+export async function health(req: Request, env: Env): Promise<Response> {
+  let build: unknown = null
+  try {
+    const res = await env.ASSETS.fetch(new Request(new URL('/version.json', req.url)))
+    if (res.ok && (res.headers.get('content-type') ?? '').includes('json')) build = await res.json()
+  } catch {
+    /* no version file in this build */
+  }
+  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'] as const
+  return json({
+    ok: true,
+    time: new Date().toISOString(),
+    build,
+    pipeline: pipelineConfigured(env) && env.PIPELINE_ENABLED !== 'false',
+    ai: !!env.ANTHROPIC_API_KEY,
+    missing: required.filter((k) => !env[k]),
+  })
+}
+
 export async function geocode(req: Request, env: Env, ctx: Ctx, fetchImpl: typeof fetch = fetch): Promise<Response> {
   const url = new URL(req.url)
   const q = (url.searchParams.get('q') ?? '').trim().replace(/\s+/g, ' ')
@@ -125,9 +145,7 @@ export default {
   async fetch(req: Request, env: Env, ctx: Ctx): Promise<Response> {
     const url = new URL(req.url)
     try {
-      if (url.pathname === '/api/health') {
-        return json({ ok: true, time: new Date().toISOString(), pipeline: pipelineConfigured(env) && env.PIPELINE_ENABLED !== 'false', ai: !!env.ANTHROPIC_API_KEY })
-      }
+      if (url.pathname === '/api/health') return await health(req, env)
       if (url.pathname === '/api/geocode') return await geocode(req, env, ctx)
       if (url.pathname === '/api/admin/run') return await adminRun(req, env, ctx)
       if (url.pathname.startsWith('/api/')) return json({ error: 'Not found' }, 404)

@@ -33,7 +33,7 @@ export default function WelcomeScreen() {
 
       <div className="flex-1 px-6 pt-7">
         <h2 className="text-lg font-extrabold text-choc">Where do you go for happy hour?</h2>
-        <p className="mt-1 text-sm text-muted">Launching first in {markets[0]?.name ?? 'Stuart & Martin County'}, Florida. Search anywhere — we'll show what we know.</p>
+        <p className="mt-1 text-sm text-muted">Launching first in {markets.find((m) => !m.autoCreated)?.name ?? 'Stuart & Martin County'}, Florida. Search anywhere — we'll show what we know.</p>
         <Button variant="secondary" block className="mt-4" loading={locating} onClick={requestLocation}>
           <LocateFixed className="size-4" /> {origin ? 'Using your location ✓' : 'Use my location'}
         </Button>

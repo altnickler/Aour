@@ -8,6 +8,8 @@ import { LocationProvider } from '@/app/location'
 import { ToastProvider } from '@/components/toast'
 import { registerServiceWorker } from '@/app/pwa'
 import { initMonitoring } from '@/app/monitoring'
+import { demoBlocked } from '@/lib/config'
+import { NotConfigured } from '@/screens/NotConfigured'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -16,20 +18,26 @@ const queryClient = new QueryClient({
   },
 })
 
-// AuthProvider uses router hooks only inside screens, so providers can wrap the router.
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <LocationProvider>
-          <ToastProvider>
-            <RouterProvider router={router} />
-          </ToastProvider>
-        </LocationProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  </StrictMode>,
-)
+const root = createRoot(document.getElementById('root')!)
 
-registerServiceWorker()
-initMonitoring()
+if (demoBlocked) {
+  // Never serve fictional demo data or demo sign-in on a public site.
+  root.render(<NotConfigured />)
+} else {
+  // AuthProvider uses router hooks only inside screens, so providers can wrap the router.
+  root.render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <LocationProvider>
+            <ToastProvider>
+              <RouterProvider router={router} />
+            </ToastProvider>
+          </LocationProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+  registerServiceWorker()
+  initMonitoring()
+}

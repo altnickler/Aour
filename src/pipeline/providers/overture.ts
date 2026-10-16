@@ -48,21 +48,39 @@ interface DuckConnection {
   closeSync?(): void
 }
 
+/** Releases are named YYYY-MM-DD.N, so the newest sorts last. */
+export function newestRelease(files: string[]): string | null {
+  const names = new Set<string>()
+  for (const f of files) {
+    const m = /\/release\/(\d{4}-\d{2}-\d{2}\.\d+)\/theme=places\//.exec(f.replace(/\\/g, '/'))
+    if (m) names.add(m[1])
+  }
+  return [...names].sort().at(-1) ?? null
+}
+
 /**
- * @param path  Parquet glob. Defaults to the public release: `${OVERTURE_BUCKET}/<release>/theme=places/type=place/*`.
+ * @param release  Overture release (e.g. 2026-09-17.0). When omitted, the newest release in `root` is used.
+ * @param root     Release root; defaults to the public bucket (tests point it at a local directory).
+ * @param path     Explicit Parquet glob (overrides release/root).
  */
-export function overtureSource(opts: { release?: string; path?: string; connect?: () => Promise<DuckConnection> }): PlaceSource {
-  const path = opts.path ?? (opts.release ? `${OVERTURE_BUCKET}/${opts.release}/theme=places/type=place/*` : null)
+export function overtureSource(opts: { release?: string; root?: string; path?: string; connect?: () => Promise<DuckConnection> }): PlaceSource {
+  const root = (opts.root ?? OVERTURE_BUCKET).replace(/\/+$/, '')
+  let resolved: string | null = opts.path ?? (opts.release ? `${root}/${opts.release}/theme=places/type=place/*` : null)
   return {
     provider: 'overture',
     budgetKey: 'overture',
     async fetchCandidates(bbox) {
-      if (!path) throw new Error('OVERTURE_RELEASE is not set (e.g. 2026-09-17.0 — see https://docs.overturemaps.org/release/latest/)')
       const conn = await (opts.connect ?? defaultConnect)()
       try {
         // Public bucket: anonymous reads, no credentials needed.
-        if (path.startsWith('s3://')) await conn.run("SET s3_region = 'us-west-2'")
-        const reader = await conn.runAndReadAll(overtureSql(), { path, west: bbox.west, east: bbox.east, south: bbox.south, north: bbox.north })
+        if ((resolved ?? root).startsWith('s3://')) await conn.run("SET s3_region = 'us-west-2'")
+        if (!resolved) {
+          const listing = await conn.runAndReadAll('SELECT file FROM glob($pattern)', { pattern: `${root}/*/theme=places/type=place/*` })
+          const latest = newestRelease(listing.getRowObjectsJS().map((r) => String(r.file)))
+          if (!latest) throw new Error(`No Overture places release found under ${root}; set OVERTURE_RELEASE (https://docs.overturemaps.org/release/latest/)`)
+          resolved = `${root}/${latest}/theme=places/type=place/*`
+        }
+        const reader = await conn.runAndReadAll(overtureSql(), { path: resolved, west: bbox.west, east: bbox.east, south: bbox.south, north: bbox.north })
         return reader
           .getRowObjectsJS()
           .map((r) => overtureToCandidate(toRow(r)))

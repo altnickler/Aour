@@ -25,6 +25,8 @@ export interface TickOptions {
 }
 
 export interface TickReport {
+  /** Discovery areas created from coverage requests this tick. */
+  newAreas: number
   queued: { enrich: number; discover: number; stale: number }
   claimed: number
   succeeded: number
@@ -42,9 +44,14 @@ export async function runTick(opts: TickOptions): Promise<TickReport> {
   const { store } = opts
   const now = opts.now ?? (() => new Date())
   const log = opts.log ?? (() => {})
+  // Areas people asked for become discovery areas (budget-capped) before due work is queued.
+  const newAreas = await store.promoteCoverage(1).catch((e) => {
+    log('coverage promotion failed', { message: (e as Error).message })
+    return 0
+  })
   const queued = await store.enqueueDue(opts.enqueueLimit ?? 50)
   const kinds = opts.kinds.filter((k) => (k === 'enrich_establishment' ? opts.handlers.enrich : opts.handlers.discover))
-  const report: TickReport = { queued, claimed: 0, succeeded: 0, failed: 0, skipped: 0, results: [] }
+  const report: TickReport = { newAreas, queued, claimed: 0, succeeded: 0, failed: 0, skipped: 0, results: [] }
   if (!kinds.length) return report
 
   const jobs = await store.claimJobs(opts.worker, opts.limit ?? 10, kinds)

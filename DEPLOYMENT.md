@@ -61,6 +61,22 @@ Then in the Cloudflare dashboard, open **Workers & Pages → aour → Settings �
 - `public/_headers` sets the CSP and security headers. If you use a custom Supabase domain or another map provider, add it to `connect-src` / `img-src`.
 - Optional analytics: **Analytics & Logs → Web Analytics → Add site**. Copy the token into `VITE_CF_ANALYTICS_TOKEN`.
 
+## 4b. Deploying from the Cloudflare dashboard (Workers Builds)
+
+If the Worker is connected to this GitHub repository in **Workers & Pages → aour → Settings → Build**, Cloudflare builds and deploys on every push to the connected branch. `deploy.yml` does not run in that setup, so configure these yourself:
+
+- **Build command:** `npm run build`. **Deploy command:** `npx wrangler deploy`.
+- **Build variables** (Settings → Build → Variables and secrets), because they are compiled into the web app:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+  - `VITE_SITE_URL`
+
+  Without them, the build ships in demo mode. On a public hostname the app then shows "Aour is almost ready" instead of fictional listings.
+- **Runtime variables and secrets** (Settings → Variables and secrets): see §7.
+- **Check what is live:**
+  - `https://<your-worker>/version.json` shows the commit, branch, builder and `backend` (`supabase` or `demo`).
+  - `https://<your-worker>/api/health` shows `pipeline` and `missing` (names of unset Worker secrets, never values).
+
 ## 5. Automated deploys from GitHub
 
 `.github/workflows/ci.yml` runs on every PR and push. It covers typecheck, lint, unit tests, database/RLS tests against PostGIS 17, and Playwright e2e plus accessibility on an iPhone viewport.
@@ -87,7 +103,7 @@ Additional `production` environment entries for the pipeline (§7):
 | Name | Kind | Value |
 |---|---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | secret | Service-role / `sb_secret_…` key, used **only** by the scheduled discovery workflow. Never a `VITE_` variable |
-| `OVERTURE_RELEASE` | variable | Overture release to read, e.g. `2026-09-17.0` (https://docs.overturemaps.org/release/latest/) |
+| `OVERTURE_RELEASE` | variable | Optional. Pin an Overture release, e.g. `2026-09-17.0`; by default the newest release on the public bucket is used |
 | `DISCOVERY_SOURCES` | variable | `overture` (default). Add `,osm` only after the ODbL review in DATA_SOURCES.md |
 
 ## Environment variables
@@ -141,13 +157,17 @@ Venue discovery and happy-hour refresh are automated, but they are not live unti
    - queues due work and downgrades stale data;
    - claims at most 6 jobs, with no duplicate concurrent jobs;
    - fetches politely within the monthly budgets.
-4. **Discovery from Overture:** `.github/workflows/discovery.yml` runs daily at 07:17 UTC. It also runs manually from **Actions → Discovery**. Only markets whose weekly discovery is due do work. It needs `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL` and `OVERTURE_RELEASE` in the `production` environment.
-5. **Markets:**
+4. **Discovery from Overture:** `.github/workflows/discovery.yml` runs daily at 07:17 UTC on the default branch. It also runs manually from **Actions → Discovery**. Only markets whose weekly discovery is due do work.
+   - It needs a GitHub environment named `production` containing the `SUPABASE_SERVICE_ROLE_KEY` secret and the `VITE_SUPABASE_URL` variable.
+   - Without them, the job succeeds but logs "discovery skipped". This is what happened on the first scheduled run (2026-10-16).
+   - `OVERTURE_RELEASE` is optional.
+5. **Automatic areas:** with location on, people who find nothing nearby send an anonymous coverage request: an ~11 km cell plus their time zone. Each scheduler tick turns at most one such request into a discovery area (10 mi, auto-publish), capped by the `auto_market` budget (3/month by default; set it to 0 or disable it in Admin → Data pipeline). Its venues are imported on the next Discovery run, and happy hours are then refreshed from the venues' own websites.
+6. **Markets:**
    - The launch market exists from the migrations (radius 15 mi, discovery on, auto-publish on).
    - New markets come from **Admin → Data pipeline → Coverage requests → Create market**. Auto-publish is off by default, so discovered venues wait as drafts.
-6. **Budgets:** review **Admin → Data pipeline → Jobs & budgets**. Defaults: 20k pages, 60 Overture queries and 30k geocodes per month; OSM, Foursquare and AI are off.
-7. **Rate limit:** `/api/geocode` uses the Workers Rate Limiting binding `GEOCODE_LIMITER` (30 requests/min per IP), declared in `wrangler.jsonc`.
-8. **Crawler page:** `https://aour.app/bot` explains AourBot and how to opt out. Keep `bot@aour.app` monitored.
+7. **Budgets:** review **Admin → Data pipeline → Jobs & budgets**. Defaults: 20k pages, 60 Overture queries and 30k geocodes per month; OSM, Foursquare and AI are off.
+8. **Rate limit:** `/api/geocode` uses the Workers Rate Limiting binding `GEOCODE_LIMITER` (30 requests/min per IP), declared in `wrangler.jsonc`.
+9. **Crawler page:** `https://aour.app/bot` explains AourBot and how to opt out. Keep `bot@aour.app` monitored.
 
 ## 8. Staging and integration tests
 

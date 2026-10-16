@@ -2,18 +2,19 @@
  * Pipeline pieces that need no database: Overture query (DuckDB over a local Parquet file with
  * Overture's column layout — rows are FICTIONAL), fetcher helpers, AI-input selection, Worker API.
  */
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { DuckDBInstance } from '@duckdb/node-api'
 import { bboxAround } from '@/core/ingest/providers'
-import { overtureSource } from '@/pipeline/providers/overture'
+import { newestRelease, overtureSource } from '@/pipeline/providers/overture'
 import { looksLikeChallenge, parseRetryAfter, sameSite } from '@/pipeline/fetcher'
 import { selectRelevantText, toFinding } from '@/pipeline/llm'
 import { retryDelayMs } from '@/pipeline/runner'
 import { supabaseRpc } from '@/pipeline/rest'
 import worker, { geocode, type Env } from '../../worker/index'
+import { demoAllowedOn } from '@/lib/config'
 
 const dir = mkdtempSync(join(tmpdir(), 'aour-overture-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
@@ -48,9 +49,24 @@ describe('Overture adapter', () => {
     expect(byName['Fixture Closed Tavern'].closed).toBe(true) // kept so an existing listing can be archived
   })
 
-  it('refuses to guess a release', async () => {
-    const source = overtureSource({})
-    await expect(source.fetchCandidates(bboxAround(27, -80, 5), {} as never)).rejects.toThrow(/OVERTURE_RELEASE/)
+  it('uses the newest release when none is configured, and says so clearly when none exists', async () => {
+    const db = await DuckDBInstance.create(':memory:')
+    const c = await db.connect()
+    const releaseDir = (r: string) => join(dir, 'release', r, 'theme=places', 'type=place')
+    for (const [release, name] of [['2026-08-20.0', 'Fixture Old Release Bar'], ['2026-09-17.0', 'Fixture New Release Bar']]) {
+      mkdirSync(releaseDir(release), { recursive: true })
+      await c.run(`COPY (SELECT 'id-${release}' AS id, {'primary': '${name}'} AS names, 'bar' AS basic_category,
+        {'hierarchy': ['bar'], 'alternates': []::VARCHAR[]} AS taxonomy, {'xmin': -80.25, 'xmax': -80.25, 'ymin': 27.2, 'ymax': 27.2} AS bbox,
+        0.9 AS confidence, 'open' AS operating_status, [{'freeform': '1 Example Way', 'locality': 'Stuart', 'region': 'FL', 'postcode': '34994', 'country': 'US'}] AS addresses,
+        ['https://x.example'] AS websites, ['+17725550100'] AS phones) TO '${join(releaseDir(release), 'part-0.parquet')}' (FORMAT parquet)`)
+    }
+    c.closeSync()
+    expect(newestRelease(['s3://b/release/2026-08-20.0/theme=places/type=place/a', 's3://b/release/2026-10-15.1/theme=places/type=place/b'])).toBe('2026-10-15.1')
+
+    const market = { id: 'm', name: 'Stuart', lat: 27.2, lng: -80.25, radiusMiles: 15, timezone: 'America/New_York', discoveryEnabled: true }
+    const out = await overtureSource({ root: join(dir, 'release') }).fetchCandidates(bboxAround(27.2, -80.25, 5), market)
+    expect(out.map((p) => p.name)).toEqual(['Fixture New Release Bar'])
+    await expect(overtureSource({ root: join(dir, 'empty') }).fetchCandidates(bboxAround(27, -80, 5), market)).rejects.toThrow(/No Overture places release/)
   })
 })
 
@@ -111,6 +127,14 @@ describe('AI extraction input/output', () => {
   })
 })
 
+describe('demo mode is development-only', () => {
+  it('allows local and private-network hosts, refuses public ones unless explicitly opted in', () => {
+    for (const h of ['localhost', '127.0.0.1', '192.168.1.20', '10.0.0.5', '172.20.1.1', 'mac.local']) expect(demoAllowedOn(h, false)).toBe(true)
+    for (const h of ['aour.mute-frost-03a9.workers.dev', 'aour.app', '172.40.1.1', '8.8.8.8']) expect(demoAllowedOn(h, false)).toBe(false)
+    expect(demoAllowedOn('aour.app', true)).toBe(true)
+  })
+})
+
 describe('Worker API', () => {
   const ctx = { waitUntil: () => {} }
   const env = (over: Partial<Env> = {}): Env => ({ ASSETS: { fetch: async () => new Response('asset') }, ...over })
@@ -118,7 +142,7 @@ describe('Worker API', () => {
   it('serves assets for non-API paths and reports configuration without secrets', async () => {
     expect(await (await worker.fetch(new Request('https://aour.app/discover'), env(), ctx)).text()).toBe('asset')
     const health = await (await worker.fetch(new Request('https://aour.app/api/health'), env({ SUPABASE_SERVICE_ROLE_KEY: 'secret-value', SUPABASE_URL: 'https://x.supabase.co' }), ctx)).text()
-    expect(JSON.parse(health)).toMatchObject({ ok: true, pipeline: true, ai: false })
+    expect(JSON.parse(health)).toMatchObject({ ok: true, pipeline: true, ai: false, missing: ['SUPABASE_ANON_KEY'] })
     expect(health).not.toContain('secret-value')
     expect((await worker.fetch(new Request('https://aour.app/api/nope'), env(), ctx)).status).toBe(404)
   })

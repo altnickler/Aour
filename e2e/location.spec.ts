@@ -67,7 +67,9 @@ test.describe('Location', () => {
       await page.getByRole('button', { name: 'Share location' }).click()
       await page.getByRole('button', { name: 'Done' }).click()
       await expect(page.getByRole('heading', { name: /Aour isn't in your area yet/ })).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Bring Aour here' })).toBeVisible()
+      // The (anonymous, ~11 km) coverage request is sent automatically for a real location.
+      await expect(page.getByRole('button', { name: 'Request sent' })).toBeDisabled()
+      await expect(page.getByText(/We've noted this area/)).toBeVisible()
       await expect(page.getByRole('link', { name: /Copper Heron/ })).toHaveCount(0)
     })
   })
