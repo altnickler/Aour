@@ -8,7 +8,7 @@ import { assess, decideApply, recencyFactor, reliability } from '@/core/ingest/c
 import { findBestMatch, nameSimilarity, normalizePhone, websiteDomain } from '@/core/ingest/match'
 import { isAllowed, parseRobots, robotsFromResponse } from '@/core/ingest/robots'
 import { canSpend, isCrawlableWebsite, isStale, nextCheckAt, politeDelayMs } from '@/core/ingest/refresh'
-import { bboxAround, fsqToCandidate, kindFromCategories, kindFromOverture, osmToCandidate, overpassQuery, overtureToCandidate, storageAllowed, type OsmElement } from '@/core/ingest/providers'
+import { bboxAround, fsqToCandidate, isQuickServiceChain, kindFromCategories, kindFromOverture, osmToCandidate, overpassQuery, overtureToCandidate, storageAllowed, type OsmElement } from '@/core/ingest/providers'
 import type { HappyHourFinding } from '@/core/ingest/types'
 import { happyHourStatus } from '@/core/schedule'
 
@@ -365,6 +365,15 @@ describe('provider adapters', () => {
     ] as [string | null, string | null, string[]][]) {
       expect(kindFromOverture(b, p, alt), `${b}/${p}`).toBeNull()
     }
+  })
+
+  it('drops quick-service chains Overture files as restaurants, but not lookalike local names', () => {
+    for (const n of ['Burger King', "Papa John's Pizza", 'Little Caesars Pizza', "Hungry Howie's Pizza", 'Bubbakoo\'s Burritos', 'KFC', 'IHOP', 'Wendy\'s'])
+      expect(isQuickServiceChain(n), n).toBe(true)
+    for (const n of ["Conchy Joe's Seafood", "Duffy's Sports Grill", 'Harry and the Natives', 'Townies Tavern', 'The Sandbar Tiki Bar and Grill', "Carrabba's Italian Grill"])
+      expect(isQuickServiceChain(n), n).toBe(false)
+    const row = { id: 'x', name: 'Burger King', basic_category: 'restaurant', primary_category: 'burger_restaurant', lat: 27.2, lng: -80.25, confidence: 0.9 }
+    expect(overtureToCandidate(row)).toBeNull()
   })
 
   it('category filter keeps happy-hour venue types only', () => {

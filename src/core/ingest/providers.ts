@@ -68,6 +68,25 @@ const OVERTURE_NOT_RESTAURANT = new Set([
 ])
 const OVERTURE_RESTAURANT_EXACT = new Set(['restaurant', 'steakhouse', 'bistro', 'brasserie', 'tapas_bar', 'seafood_market_restaurant'])
 
+/**
+ * National quick-service / delivery chains that Overture files as ordinary restaurants but that
+ * do not run bar-style happy hours. Matched on the normalised start of the name.
+ */
+const QUICK_SERVICE_CHAINS = [
+  'burger king', 'mcdonald', 'wendy', 'taco bell', 'kfc', 'kentucky fried', 'subway', 'little caesar', 'papa john', 'domino',
+  'pizza hut', 'hungry howie', 'marco\'s pizza', 'papa murphy', 'jersey mike', 'firehouse subs', 'jimmy john', 'chick-fil-a',
+  'popeyes', 'zaxby', 'arby', 'sonic drive', 'dairy queen', 'chipotle', 'moe\'s southwest', 'bubbakoo', 'qdoba', 'five guys',
+  'wingstop', 'panera', 'dunkin', 'starbucks', 'checkers', 'rally\'s', 'culver', 'panda express', 'tropical smoothie',
+  'smoothie king', 'krispy kreme', 'ihop', 'waffle house', 'denny', 'cracker barrel', 'bojangles', 'jack in the box',
+  'steak n shake', 'hardee', 'del taco', 'wawa', '7-eleven', 'golden corral', 'pdq', 'pollo tropical', 'boston market',
+  'jet\'s pizza', 'cicis', 'sbarro', 'blaze pizza', 'mod pizza', 'jason\'s deli', 'potbelly', 'which wich', 'tijuana flats',
+]
+
+export function isQuickServiceChain(name: string): boolean {
+  const n = name.toLowerCase().replace(/[\u2019]/g, "'").replace(/\s+/g, ' ').trim()
+  return QUICK_SERVICE_CHAINS.some((c) => n === c || n.startsWith(`${c} `) || n.startsWith(`${c}'`) || n.startsWith(`${c}s`) || n.startsWith(c))
+}
+
 export function kindFromOverture(basic: string | null | undefined, primary: string | null | undefined, alternates: string[] = []): EstablishmentKind | null {
   const b = (basic ?? '').toLowerCase()
   const p = (primary ?? '').toLowerCase()
@@ -206,7 +225,7 @@ export function overtureToCandidate(r: OvertureRow, minConfidence = 0.6): Candid
   const cats = [r.basic_category ?? '', ...(r.categories ?? [])].filter(Boolean)
   const primary = r.primary_category ?? r.categories?.at(-1) ?? null
   const kind = kindFromOverture(r.basic_category, primary, r.categories ?? [])
-  if (!kind) return null
+  if (!kind || isQuickServiceChain(name)) return null
   return {
     provider: 'overture',
     externalId: r.id,
