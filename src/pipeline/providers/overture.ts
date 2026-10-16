@@ -18,13 +18,31 @@ export const OVERTURE_BUCKET = 's3://overturemaps-us-west-2/release'
 /** Pre-filter in SQL so we transfer only plausible happy-hour venues; kindFromCategories decides. */
 const CATEGORY_RE = 'bar|pub|brew|taproom|beer|wine|winery|cocktail|lounge|tavern|saloon|night_?club|restaurant|grill|bistro|gastropub|tapas|oyster|seafood|steak|izakaya|tiki'
 
-export function overtureSql(): string {
+/** Column name → DuckDB type, from DESCRIBE on the release being read. */
+export type OvertureColumns = Map<string, string>
+
+/**
+ * Overture's places columns change between releases (e.g. `categories {primary, alternate}`
+ * → `taxonomy {hierarchy, alternates}` + `basic_category`). Build the query from the columns
+ * the release actually has, so a schema change degrades gracefully instead of failing.
+ */
+export function overtureSql(cols: OvertureColumns): string {
+  const type = (c: string) => (cols.get(c) ?? '').toLowerCase()
+  const parts: string[] = []
+  if (type('taxonomy').includes('hierarchy')) parts.push('coalesce(taxonomy.hierarchy, []::VARCHAR[])')
+  if (type('taxonomy').includes('alternates')) parts.push('coalesce(taxonomy.alternates, []::VARCHAR[])')
+  if (type('categories').includes('primary')) parts.push("coalesce([categories.primary], []::VARCHAR[])")
+  if (type('categories').includes('alternate')) parts.push('coalesce(categories.alternate, []::VARCHAR[])')
+  const categories = parts.length ? parts.reduce((a, b) => `list_concat(${a}, ${b})`) : '[]::VARCHAR[]'
+  const basic = cols.has('basic_category') ? 'basic_category' : 'NULL::VARCHAR'
+  const status = cols.has('operating_status') ? 'operating_status' : 'NULL::VARCHAR'
+  const confidence = cols.has('confidence') ? 'confidence' : '1.0'
   return `
 SELECT
   id,
   names.primary AS name,
-  basic_category,
-  list_concat(coalesce(taxonomy.hierarchy, []::VARCHAR[]), coalesce(taxonomy.alternates, []::VARCHAR[])) AS categories,
+  ${basic} AS basic_category,
+  list_filter(${categories}, x -> x IS NOT NULL) AS categories,
   (bbox.ymin + bbox.ymax) / 2 AS lat,
   (bbox.xmin + bbox.xmax) / 2 AS lng,
   addresses[1].freeform AS freeform,
@@ -33,13 +51,13 @@ SELECT
   addresses[1].postcode AS postcode,
   websites[1] AS website,
   phones[1] AS phone,
-  confidence,
-  operating_status
+  ${confidence} AS confidence,
+  ${status} AS operating_status
 FROM read_parquet($path, hive_partitioning = true)
 WHERE bbox.xmin BETWEEN $west AND $east
   AND bbox.ymin BETWEEN $south AND $north
-  AND coalesce(confidence, 0) >= 0.5
-  AND regexp_matches(lower(coalesce(basic_category, '') || ' ' || array_to_string(coalesce(taxonomy.hierarchy, []::VARCHAR[]), ' ')), '${CATEGORY_RE}')`
+  AND coalesce(${confidence}, 0) >= 0.5
+  AND regexp_matches(lower(coalesce(${basic}, '') || ' ' || array_to_string(${categories}, ' ')), '${CATEGORY_RE}')`
 }
 
 interface DuckConnection {
@@ -80,7 +98,9 @@ export function overtureSource(opts: { release?: string; root?: string; path?: s
           if (!latest) throw new Error(`No Overture places release found under ${root}; set OVERTURE_RELEASE (https://docs.overturemaps.org/release/latest/)`)
           resolved = `${root}/${latest}/theme=places/type=place/*`
         }
-        const reader = await conn.runAndReadAll(overtureSql(), { path: resolved, west: bbox.west, east: bbox.east, south: bbox.south, north: bbox.north })
+        const described = await conn.runAndReadAll('DESCRIBE SELECT * FROM read_parquet($path, hive_partitioning = true)', { path: resolved })
+        const cols: OvertureColumns = new Map(described.getRowObjectsJS().map((r) => [String(r.column_name), String(r.column_type)]))
+        const reader = await conn.runAndReadAll(overtureSql(cols), { path: resolved, west: bbox.west, east: bbox.east, south: bbox.south, north: bbox.north })
         return reader
           .getRowObjectsJS()
           .map((r) => overtureToCandidate(toRow(r)))

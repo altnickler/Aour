@@ -49,6 +49,22 @@ describe('Overture adapter', () => {
     expect(byName['Fixture Closed Tavern'].closed).toBe(true) // kept so an existing listing can be archived
   })
 
+  it('adapts to older releases that use categories {primary, alternate} instead of taxonomy', async () => {
+    const file = join(dir, 'legacy.parquet')
+    const db = await DuckDBInstance.create(':memory:')
+    const c = await db.connect()
+    await c.run(`COPY (SELECT * FROM (VALUES
+      ('L1', {'primary': 'Fixture Legacy Pub'}, {'primary': 'pub', 'alternate': ['bar']}, {'xmin': -80.25, 'xmax': -80.25, 'ymin': 27.2, 'ymax': 27.2}, 0.9,
+       [{'freeform': '1 Example Way', 'locality': 'Stuart', 'region': 'FL', 'postcode': '34994', 'country': 'US'}], ['https://legacy.example'], ['+17725550100']),
+      ('L2', {'primary': 'Fixture Legacy Coffee'}, {'primary': 'coffee_shop', 'alternate': []::VARCHAR[]}, {'xmin': -80.25, 'xmax': -80.25, 'ymin': 27.2, 'ymax': 27.2}, 0.9,
+       [{'freeform': '2 Example Way', 'locality': 'Stuart', 'region': 'FL', 'postcode': '34994', 'country': 'US'}], []::VARCHAR[], []::VARCHAR[])
+    ) t(id, names, categories, bbox, confidence, addresses, websites, phones)) TO '${file}' (FORMAT parquet)`)
+    c.closeSync()
+    const market = { id: 'm', name: 'Stuart', lat: 27.2, lng: -80.25, radiusMiles: 15, timezone: 'America/New_York', discoveryEnabled: true }
+    const out = await overtureSource({ path: file }).fetchCandidates(bboxAround(27.2, -80.25, 5), market)
+    expect(out.map((p) => [p.name, p.kind, p.closed])).toEqual([['Fixture Legacy Pub', 'bar', false]])
+  })
+
   it('uses the newest release when none is configured, and says so clearly when none exists', async () => {
     const db = await DuckDBInstance.create(':memory:')
     const c = await db.connect()
