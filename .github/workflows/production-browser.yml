@@ -18,11 +18,13 @@ permissions:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       SITE_URL: ${{ vars.SITE_URL || 'https://aour.mute-frost-03a9.workers.dev' }}
       SEARCH_NAME: ${{ github.event.inputs.search || 'Black Marlin' }}
       EXPECT_PASS: ${{ github.event.inputs.expect_pass || '0' }}
+      # Wait until the site serves this commit (Cloudflare deploys each push automatically).
+      EXPECT_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

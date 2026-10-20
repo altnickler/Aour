@@ -18,6 +18,7 @@ export const keys = {
   nearby: (c: LatLng, radius: number) => ['nearby', c.lat.toFixed(2), c.lng.toFixed(2), radius] as const,
   byIds: (ids: string[]) => ['places-by-id', ids.join(',')] as const,
   geocode: (q: string) => ['geocode', q] as const,
+  search: (q: string) => ['place-search', q] as const,
   place: (slug: string) => ['place', slug] as const,
   reviews: (id: string, following: boolean) => ['reviews', id, following] as const,
   me: (uid: string | null) => ['me', uid] as const,
@@ -95,6 +96,18 @@ export function useListingIndex(extraIds: readonly string[] = []) {
   })
   const index = useMemo(() => new Map((q.data ?? []).map((e) => [e.id, e])), [q.data])
   return { ...q, isLoading: q.isLoading || visits.isLoading, index }
+}
+
+/** Places by name/city/address across all published listings — no location or sign-in needed. */
+export function useSearchPlaces(query: string) {
+  const q = query.trim().replace(/\s+/g, ' ').toLowerCase()
+  return useQuery({
+    queryKey: keys.search(q),
+    queryFn: () => api.searchEstablishments(q),
+    enabled: q.length >= 2,
+    staleTime: FIVE_MIN,
+    placeholderData: keepPreviousData,
+  })
 }
 
 export function useGeocode(query: string) {

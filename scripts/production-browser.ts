@@ -37,11 +37,22 @@ const EST_COLUMNS =
 const EST_SELECT = `${EST_COLUMNS}, happy_hour_windows(*), schedule_exceptions(*), happy_hour_specials(*), establishment_photos(*), establishment_stats(*)`
 
 const failures: string[] = []
+/** Real venue names the public API returned near each town (what the screens must show). */
+const expected = new Map<string, string[]>()
 const out = (s = '') => console.log(s)
 
 async function api() {
   out('## 1. Public API as the anonymous role')
-  const v = (await (await fetch(`${SITE}/version.json`, { cache: 'no-store' })).json()) as { commit?: string; builtAt?: string; supabase?: { url: string; anonKey: string } | null }
+  type Version = { commit?: string; builtAt?: string; supabase?: { url: string; anonKey: string } | null }
+  let v = (await (await fetch(`${SITE}/version.json`, { cache: 'no-store' })).json()) as Version
+  // Test the build under review, not an older deployment still being served.
+  const want = process.env.EXPECT_COMMIT
+  for (let i = 0; want && !v.commit?.startsWith(want.slice(0, 7)) && i < 24; i++) {
+    out(`- waiting for deployment of ${want.slice(0, 7)} (serving ${v.commit?.slice(0, 7)})`)
+    await new Promise((r) => setTimeout(r, 30_000))
+    v = (await (await fetch(`${SITE}/version.json?t=${Date.now()}`, { cache: 'no-store' })).json()) as Version
+  }
+  if (want && !v.commit?.startsWith(want.slice(0, 7))) failures.push(`deployment of ${want.slice(0, 7)} not live after 12 minutes (serving ${v.commit?.slice(0, 7)})`)
   out(`- Deployed build: commit ${v.commit?.slice(0, 7)} built ${v.builtAt}`)
   if (!v.supabase) {
     failures.push('version.json has no Supabase settings (the app runs without a backend)')
@@ -74,6 +85,7 @@ async function api() {
       { p_lat: t.lat, p_lng: t.lng, p_radius_m: Math.round(5 * 1609.34), p_limit: 300 },
     )
     if (rows && rows.length === 0) failures.push(`nearby ${t.name}: 0 rows`)
+    expected.set(t.name, (rows ?? []).map((r) => String(r.name)))
   }
   await call(`name search "${SEARCH}" (anon)`, `establishments?select=id,name,city,status,hh_status&name=ilike.*${encodeURIComponent(SEARCH)}*`)
   await call('search_establishments RPC (anon)', 'rpc/search_establishments?select=id,name,city,hh_status', { p_query: SEARCH, p_lat: null, p_lng: null, p_limit: 10 })
@@ -109,6 +121,17 @@ function watch(page: Page): Log {
     log.responses.push(`${r.request().method()} ${u.pathname}${u.search.slice(0, 90)} → ${r.status()}${detail}`)
   })
   return log
+}
+
+/** Which of the real venue names are visible on the page. */
+function visibleNames(text: string, names: string[]): string[] {
+  return names.filter((n) => n.length > 3 && text.includes(n))
+}
+
+function requireNames(where: string, text: string, names: string[]) {
+  const seen = visibleNames(text, names)
+  out(`Real venues visible: ${seen.length} — ${seen.slice(0, 8).join(' · ') || 'none'}`)
+  if (!seen.length) failures.push(`${where}: no real venue names visible`)
 }
 
 async function snapshot(page: Page, log: Log, name: string) {
@@ -149,21 +172,30 @@ async function browser(expectCommit: string | undefined) {
     await page.getByRole('button', { name: /show me happy hours/i }).click()
   }
   const discover = await snapshot(page, log, '02-discover-no-location')
-  if (!/mi\b|miles/i.test(discover) || /isn't in|No happy-hour details|0 places/i.test(discover)) {
-    out('(check: Discover text above)')
-  }
+  requireNames('Discover without location (default city)', discover, expected.get('Stuart') ?? [])
+  if (/Something went wrong|Couldn't load/i.test(discover)) failures.push('Discover shows an error')
 
   await page.goto(`${SITE}/search`, { waitUntil: 'domcontentloaded' })
   const box = page.getByRole('searchbox').or(page.getByPlaceholder(/search/i)).first()
   await box.fill(SEARCH)
   const search = await snapshot(page, log, '03-search-no-location')
-  if (!search.toLowerCase().includes(SEARCH.toLowerCase().split(' ')[0])) failures.push(`Search for "${SEARCH}" without location did not show it`)
-  else if (!new RegExp(SEARCH, 'i').test(search.split('\n').slice(2).join('\n'))) failures.push(`Search for "${SEARCH}" shows only the query, not the venue`)
+  // The typed text lives in the input (not innerText), so a visible match is a result row.
+  if (!search.toLowerCase().includes(SEARCH.toLowerCase())) failures.push(`Search for "${SEARCH}" without location did not show it`)
+  else out(`Search result visible: "${SEARCH}" ✓`)
+
+  // A name far outside the default 5-mile view must be found too (search is not limited to nearby).
+  const far = (expected.get('Hobe Sound') ?? []).find((n) => n.length > 5 && !(expected.get('Stuart') ?? []).includes(n))
+  if (far) {
+    await box.fill(far)
+    const farText = await snapshot(page, log, '03b-search-far-venue')
+    if (!farText.includes(far)) failures.push(`Search for "${far}" (outside the default view) did not show it`)
+    else out(`Search result visible: "${far}" ✓`)
+  }
 
   await page.goto(SITE, { waitUntil: 'domcontentloaded' })
   await page.reload({ waitUntil: 'domcontentloaded' })
   const reloaded = await snapshot(page, log, '04-discover-after-reload')
-  if (/Aour isn't in|We don't have listings/i.test(reloaded)) failures.push('Discover after reload says there are no listings')
+  requireNames('Discover after reload', reloaded, expected.get('Stuart') ?? [])
   await ctx.browser()?.close()
 
   out('\n## 3. With location shared, per launch town')
@@ -178,7 +210,7 @@ async function browser(expectCommit: string | undefined) {
     const start = p.getByRole('button', { name: /show me happy hours/i })
     if (await start.isVisible().catch(() => false)) await start.click()
     const text = await snapshot(p, l, `05-${t.name.toLowerCase().replace(/\s+/g, '-')}-located`)
-    if (/Aour isn't in|We don't have listings/i.test(text)) failures.push(`${t.name}: Discover says no listings`)
+    requireNames(`Discover near ${t.name} (location shared)`, text, expected.get(t.name) ?? [])
     await c.browser()?.close()
   }
 }

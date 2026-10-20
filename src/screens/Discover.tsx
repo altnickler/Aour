@@ -72,7 +72,10 @@ export default function DiscoverScreen() {
   const [tags, setTags] = useState<string[]>([])
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [areaOpen, setAreaOpen] = useState(false)
-  const [showCandidates, setShowCandidates] = useState(false)
+  // Venues without confirmed happy-hour details are listed by default (labelled Unconfirmed), so an
+  // area is never shown as empty just because no happy hour has been confirmed there yet.
+  const [showCandidates, setShowCandidates] = useState(true)
+  const [candidateLimit, setCandidateLimit] = useState(30)
   const [limit, setLimit] = useState(PAGE)
 
   // First launch: a lightweight welcome (skippable), never a wall.
@@ -211,7 +214,7 @@ export default function DiscoverScreen() {
       </div>
 
       {listings.isError ? (
-        <ErrorState error={listings.error} retry={() => listings.refetch()} />
+        <ErrorState title="Couldn't load places" error={listings.error} retry={() => listings.refetch()} />
       ) : listings.isLoading || !center ? (
         <div className="mt-6 space-y-4 px-5">
           <PlaceCardSkeleton />
@@ -250,7 +253,7 @@ export default function DiscoverScreen() {
                   title={inRange.length ? `No happy-hour details near ${where} yet` : `Aour isn't in ${center.kind === 'device' ? 'your area' : center.label} yet`}
                   body={
                     inRange.length
-                      ? `We know ${inRange.length} ${inRange.length === 1 ? 'venue' : 'venues'} within ${radiusMiles} mi, but none with confirmed happy-hour information.`
+                      ? `We know ${inRange.length} ${inRange.length === 1 ? 'venue' : 'venues'} within ${radiusMiles} mi — listed below as unconfirmed until we find their happy-hour details.`
                       : center.kind === 'device'
                         ? `We don't have listings within ${radiusMiles} mi yet. We've noted this area (anonymously) so venue discovery can start here. Try a wider radius meanwhile.`
                         : `We don't have listings within ${radiusMiles} mi. Try a wider radius, or tell us you'd like Aour here.`
@@ -314,19 +317,24 @@ export default function DiscoverScreen() {
           {candidates.length > 0 && (
             <section className="mx-5 mt-8 rounded-card bg-white p-4 shadow-card" aria-labelledby="candidates-title">
               <h2 id="candidates-title" className="font-extrabold text-choc">
-                Other venues nearby <span className="font-semibold text-muted">({candidates.length})</span>
+                {withInfo.length ? 'More venues nearby' : 'Venues nearby'} <span className="font-semibold text-muted">({candidates.length})</span>
               </h2>
               <p className="mt-1 text-sm text-muted">
-                Bars and restaurants from open map data. We haven't found happy-hour details for them — they may not have one. Know their deal? Tell us.
+                Bars and restaurants from open map data. Happy hour unconfirmed — we haven't found details for them yet, and some may not have one. Know their deal? Tell us.
               </p>
               <Button className="mt-3" size="sm" variant="secondary" aria-expanded={showCandidates} onClick={() => setShowCandidates(!showCandidates)}>
                 {showCandidates ? 'Hide' : 'Show'} unconfirmed venues
               </Button>
               {showCandidates && (
                 <div className="mt-2 -mx-2">
-                  {candidates.slice(0, 30).map((e) => (
+                  {candidates.slice(0, candidateLimit).map((e) => (
                     <PlaceRow key={e.id} place={e} origin={center.point} now={now} trailing={<span className="text-xs font-semibold text-muted">Unconfirmed</span>} />
                   ))}
+                  {candidateLimit < candidates.length && (
+                    <Button className="mx-2 mt-2" size="sm" variant="secondary" onClick={() => setCandidateLimit((n) => n + 30)}>
+                      Show more venues
+                    </Button>
+                  )}
                 </div>
               )}
             </section>

@@ -45,6 +45,19 @@ const EST_COLUMNS =
 const EST_SELECT = `${EST_COLUMNS}, happy_hour_windows(*), schedule_exceptions(*), happy_hour_specials(*), establishment_photos(*), establishment_stats(*)`
 const VISIT_SELECT = '*, rating_scores(category_key, score), visit_tags(tag), visit_notes(body), reviews(body, status), visit_photos(storage_path)'
 
+const yesterdayDate = () => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+
+/** Characters with meaning in PostgREST filter syntax are dropped; the term is matched as plain text. */
+export function searchTerm(query: string): string | null {
+  const terms = query
+    .normalize('NFKC')
+    .replace(/["\\*%,()]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 2)
+    .sort((a, b) => b.length - a.length)
+  return terms[0] ?? null
+}
+
 function one<T>(v: T | T[] | null | undefined): T | null {
   if (Array.isArray(v)) return v[0] ?? null
   return v ?? null
@@ -114,7 +127,9 @@ function mapEstablishment(r: Row): Establishment {
     windows: (r.happy_hour_windows ?? [])
       .sort((a: Row, b: Row) => a.sort_order - b.sort_order)
       .map((w: Row) => ({ id: w.id, days: w.days, start: hhmm(w.start_time)!, end: hhmm(w.end_time)!, label: w.label, notes: w.notes })),
-    exceptions: (r.schedule_exceptions ?? []).map((x: Row) => ({
+    // Past one-off dates are irrelevant; filtered here because PostgREST rejects embedded-resource
+    // filters on RPC results ("column pgrst_call.date does not exist"), which emptied Discover.
+    exceptions: (r.schedule_exceptions ?? []).filter((x: Row) => !x.date || x.date >= yesterdayDate()).map((x: Row) => ({
       id: x.id,
       date: x.date,
       closed: x.closed,
@@ -294,28 +309,36 @@ export class SupabaseApi implements Api {
   }
 
   async listEstablishments(marketId: string) {
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
     const rows = check(
-      await this.client
-        .from('establishments')
-        .select(EST_SELECT)
-        .eq('market_id', marketId)
-        .eq('status', 'published')
-        .gte('schedule_exceptions.date', yesterday)
-        .limit(1000),
+      await this.client.from('establishments').select(EST_SELECT).eq('market_id', marketId).eq('status', 'published').limit(1000),
     )
     return rows.map(mapEstablishment)
   }
 
   async nearbyEstablishments(center: LatLng, radiusMiles: number) {
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+    // No filters on embedded resources here: PostgREST cannot apply them to an RPC result.
     const rows = check(
       await this.client
         .rpc('nearby_establishments', { p_lat: center.lat, p_lng: center.lng, p_radius_m: Math.round(radiusMiles * 1609.34), p_limit: 300 })
         .select(EST_SELECT)
-        .eq('status', 'published')
-        .gte('schedule_exceptions.date', yesterday),
+        .eq('status', 'published'),
     ) as Row[]
+    return rows.map(mapEstablishment)
+  }
+
+  async searchEstablishments(query: string) {
+    const term = searchTerm(query)
+    if (!term) return []
+    const like = `"*${term}*"`
+    const rows = check(
+      await this.client
+        .from('establishments')
+        .select(EST_SELECT)
+        .eq('status', 'published')
+        .or(`name.ilike.${like},city.ilike.${like},neighborhood.ilike.${like},address.ilike.${like}`)
+        .order('name')
+        .limit(200),
+    )
     return rows.map(mapEstablishment)
   }
 

@@ -10,6 +10,7 @@ import seed from '../demo-seed.json'
 import { communityStats, visitComposite, isValidScore, DEFAULT_WEIGHTS, validateWeights } from '@/core/rating'
 import { CATEGORY_BY_KEY, PRIMARY_CATEGORY_KEYS, TAG_BY_KEY } from '@/core/categories'
 import { distanceMiles, validateUsername, type LatLng } from '@/core/listing'
+import { matchesQuery } from '@/core/discovery'
 import type {
   AdminUser,
   Collection,
@@ -399,6 +400,11 @@ export class DemoApi implements Api {
     return this.state.establishments
       .filter((e) => e.status === 'published' && distanceMiles(center, e) <= radiusMiles)
       .map((e) => this.withCommunity(e))
+  }
+
+  async searchEstablishments(query: string) {
+    await tick()
+    return this.state.establishments.filter((e) => e.status === 'published').map((e) => this.withCommunity(e)).filter((e) => matchesQuery(e, query))
   }
 
   async getEstablishmentsByIds(ids: string[]) {

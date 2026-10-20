@@ -8,6 +8,7 @@ import { activeFilterCount, filterEstablishments, sortEstablishments, type WhenF
 
 const WHEN_LABEL: Record<WhenFilter, string> = { any: 'Any time', now: 'Now', later: 'Later today', tomorrow: 'Tomorrow', weekend: 'This weekend', day: 'Selected day' }
 import { api } from '@/data'
+import { useSearchPlaces } from '@/data/hooks'
 import { FiltersSheet } from '@/components/FiltersSheet'
 import { PlaceRow } from '@/components/place'
 import { ScoreBadge } from '@/components/score'
@@ -22,10 +23,17 @@ export default function SearchScreen() {
   const navigate = useNavigate()
   const query = useDeferredValue(filters.query)
 
-  const results = useMemo(
-    () => sortEstablishments(filterEstablishments(listings.data ?? [], { ...filters, query }, ctx), sort, ctx, personal),
-    [listings.data, filters, query, sort, ctx, personal],
-  )
+  // With a name typed, search every published listing (no location needed) plus what is nearby;
+  // without one, browse what is nearby.
+  const searching = query.trim().length >= 2
+  const found = useSearchPlaces(tab === 'places' ? query : '')
+  const source = searching ? found : listings
+  const results = useMemo(() => {
+    const pool = searching ? [...new Map([...(listings.data ?? []), ...(found.data ?? [])].map((e) => [e.id, e])).values()] : (listings.data ?? [])
+    // A named search is not limited to the discovery radius.
+    const scope = searching ? { ...ctx, radiusMiles: null } : ctx
+    return sortEstablishments(filterEstablishments(pool, { ...filters, query }, scope), sort, scope, personal)
+  }, [searching, listings.data, found.data, filters, query, sort, ctx, personal])
   const people = useQuery({
     queryKey: ['people-search', query],
     queryFn: () => api.searchProfiles(query),
@@ -95,16 +103,21 @@ export default function SearchScreen() {
             </div>
           )}
           <p className="px-5 pt-1 pb-1 text-sm text-muted" aria-live="polite">
-            {listings.isLoading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'place' : 'places'}`}
+            {source.isLoading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'place' : 'places'}`}
           </p>
-          {listings.isError ? (
-            <ErrorState error={listings.error} retry={() => listings.refetch()} />
-          ) : listings.isLoading ? (
+          {source.isError && results.length === 0 ? (
+            <ErrorState title={searching ? "Search isn't working right now" : "Couldn't load places"} error={source.error} retry={() => source.refetch()} />
+          ) : source.isLoading && results.length === 0 ? (
             <div className="space-y-3 px-4">
               {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
             </div>
           ) : results.length === 0 ? (
-            <EmptyState icon="🔍" title="No matches" body="Try fewer filters or a different search. Can't find a place? Suggest it." action={<Link className="font-bold text-choc underline" to="/suggest">Suggest a place</Link>} />
+            <EmptyState
+              icon="🔍"
+              title={searching ? `No places match “${query.trim()}”` : 'No places here yet'}
+              body={searching ? 'Check the spelling, or try fewer filters. Can’t find a place? Suggest it.' : 'Type a name to search everywhere, or try fewer filters.'}
+              action={<Link className="font-bold text-choc underline" to="/suggest">Suggest a place</Link>}
+            />
           ) : (
             <ul className="px-3">
               {results.map((e) => (

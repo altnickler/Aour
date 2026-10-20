@@ -272,6 +272,8 @@ export interface Api {
   listEstablishments(marketId: string): Promise<Establishment[]>
   /** Published listings within `radiusMiles` of a point (indexed geospatial query), any market. */
   nearbyEstablishments(center: LatLng, radiusMiles: number): Promise<Establishment[]>
+  /** Published listings whose name, city, neighborhood or address matches — anywhere, no location needed. */
+  searchEstablishments(query: string): Promise<Establishment[]>
   /** Resolve specific listings (e.g. ones a user rated or saved elsewhere). */
   getEstablishmentsByIds(ids: string[]): Promise<Establishment[]>
   getEstablishment(slugOrId: string): Promise<Establishment | null>

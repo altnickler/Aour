@@ -254,12 +254,18 @@ export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden className={cn('skeleton rounded-tile', className)} />
 }
 
-export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
+/** A failed request — never shown as "no results", so people can tell an outage from an empty area. */
+export function ErrorState({ error, retry, title = 'Something went wrong' }: { error: unknown; retry?: () => void; title?: string }) {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
   return (
     <EmptyState
       icon="😕"
-      title="Something went wrong"
-      body={error instanceof Error ? error.message : 'Please try again.'}
+      title={title}
+      body={
+        offline
+          ? "You're offline. Check your connection and try again."
+          : `We couldn't load this from Aour's servers. Please try again.${error instanceof Error && error.message ? ` (${error.message})` : ''}`
+      }
       action={retry && <Button variant="secondary" onClick={retry}>Try again</Button>}
     />
   )
