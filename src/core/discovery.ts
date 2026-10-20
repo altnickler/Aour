@@ -84,6 +84,11 @@ export function hasTag(e: Establishment, tag: string): boolean {
  * A listing with actual happy-hour facts. Venues without any (e.g. newly discovered places)
  * are "candidates" and are shown separately, clearly labelled — never mixed into results.
  */
+/** Happy-hour details we present as current: verified, or reported by the venue or the community. */
+export function hasConfirmedHappyHour(e: Establishment): boolean {
+  return (e.hhStatus === 'verified' || e.hhStatus === 'establishment_reported' || e.hhStatus === 'community_reported') && e.windows.length > 0
+}
+
 export function hasHappyHourInfo(e: Establishment): boolean {
   return e.hhStatus !== 'none' && (e.windows.length > 0 || e.specials.length > 0)
 }
@@ -267,7 +272,7 @@ export function buildShelves(input: ShelfInput): DiscoveryShelf[] {
     ? [...listings].filter((e) => distanceMiles(ctx.origin!, e) <= 10)
     : [...listings]
   const rated = [...near].filter((e) => e.community.reviewers > 0).sort((a, b) => communityRank(b) - communityRank(a))
-  const now = listings.filter((e) => happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now).state === 'now')
+  const now = listings.filter((e) => hasConfirmedHappyHour(e) && happyHourStatus(e.windows, e.exceptions, e.timezone, ctx.now).state === 'now')
   const tagged = (tag: string) => listings.filter((e) => hasTag(e, tag)).sort((a, b) => communityRank(b) - communityRank(a))
   const hidden = listings
     .filter((e) => e.community.reviewers > 0 && e.community.reviewers <= 4 && (e.community.average ?? 0) >= 8)

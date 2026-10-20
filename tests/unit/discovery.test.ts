@@ -128,3 +128,16 @@ describe('missing information and verification', () => {
     expect(verificationInfo({ hhStatus: 'none', hhVerifiedAt: null }, now).label).toBe('No happy-hour info')
   })
 })
+
+describe('confirmed vs unconfirmed happy hours', () => {
+  it('only verified or reported happy hours count as current', async () => {
+    const { hasConfirmedHappyHour } = await import('@/core/discovery')
+    const w = [{ id: 'w', days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', label: null, notes: null }]
+    const base = { windows: w } as unknown as Parameters<typeof hasConfirmedHappyHour>[0]
+    expect(hasConfirmedHappyHour({ ...base, hhStatus: 'establishment_reported' })).toBe(true)
+    expect(hasConfirmedHappyHour({ ...base, hhStatus: 'verified' })).toBe(true)
+    expect(hasConfirmedHappyHour({ ...base, hhStatus: 'unverified' })).toBe(false)
+    expect(hasConfirmedHappyHour({ ...base, hhStatus: 'outdated' })).toBe(false)
+    expect(hasConfirmedHappyHour({ ...base, hhStatus: 'establishment_reported', windows: [] })).toBe(false)
+  })
+})

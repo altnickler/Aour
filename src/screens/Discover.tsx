@@ -6,6 +6,7 @@ import { useAuth } from '@/app/auth'
 import {
   buildShelves,
   filterEstablishments,
+  hasConfirmedHappyHour,
   hasHappyHourInfo,
   sortEstablishments,
   DEFAULT_FILTERS,
@@ -113,7 +114,8 @@ export default function DiscoverScreen() {
     () => sortEstablishments(filterEstablishments(withInfo, filters, ctx), sort, ctx, personal),
     [withInfo, when, tags, verifiedOnly, sort, ctx, personal], // eslint-disable-line react-hooks/exhaustive-deps
   )
-  const nowCount = useMemo(() => filterEstablishments(withInfo, { ...DEFAULT_FILTERS, when: 'now' }, ctx).length, [withInfo, ctx])
+  // The headline counts only happy hours we present as current (not "Needs verification"/"Outdated").
+  const nowCount = useMemo(() => filterEstablishments(withInfo.filter(hasConfirmedHappyHour), { ...DEFAULT_FILTERS, when: 'now' }, ctx).length, [withInfo, ctx])
 
   const reset = () => {
     setWhen('any')

@@ -44,16 +44,19 @@ export function HappyHourPill({ place, now = new Date(), className }: { place: E
   if (place.hhStatus === 'none') return <Badge className={className}>No happy-hour info yet</Badge>
   const s = happyHourStatus(place.windows, place.exceptions, place.timezone, now)
   if (s.state === 'none') return null
+  // Times that need verification or may be out of date are never shown as a live "Now".
+  const confirmed = place.hhStatus === 'verified' || place.hhStatus === 'establishment_reported' || place.hhStatus === 'community_reported'
+  const live = confirmed && s.state === 'now'
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold whitespace-nowrap',
-        s.state === 'now' ? 'bg-success text-white' : s.state === 'later_today' ? 'bg-butter text-choc' : 'bg-beige text-choc',
+        live ? 'bg-success text-white' : confirmed && s.state === 'later_today' ? 'bg-butter text-choc' : 'bg-beige text-choc',
         className,
       )}
     >
-      {s.state === 'now' ? <span className="size-1.5 animate-pulse rounded-full bg-white" aria-hidden /> : <Clock className="size-3" aria-hidden />}
-      {s.state === 'now' ? `Now · ${statusLabel(s)}` : statusLabel(s)}
+      {live ? <span className="size-1.5 animate-pulse rounded-full bg-white" aria-hidden /> : <Clock className="size-3" aria-hidden />}
+      {live ? `Now · ${statusLabel(s)}` : confirmed ? statusLabel(s) : `Unconfirmed · ${s.state === 'now' ? 'listed now' : statusLabel(s)}`}
     </span>
   )
 }

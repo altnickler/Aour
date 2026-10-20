@@ -7,7 +7,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { ChevronLeft, List, LocateFixed, SlidersHorizontal } from 'lucide-react'
 import { useDiscovery } from '@/app/useDiscovery'
 import { useFilterState } from '@/app/filters'
-import { activeFilterCount, filterEstablishments, hasHappyHourInfo } from '@/core/discovery'
+import { activeFilterCount, filterEstablishments, hasConfirmedHappyHour, hasHappyHourInfo } from '@/core/discovery'
 import { happyHourStatus } from '@/core/schedule'
 import { formatScore } from '@/core/rating'
 import { config } from '@/lib/config'
@@ -79,7 +79,7 @@ export default function MapScreen() {
     markers.current.forEach((m) => m.remove())
     markers.current = results.map((e) => {
       const el = document.createElement('button')
-      const live = happyHourStatus(e.windows, e.exceptions, e.timezone, now).state === 'now'
+      const live = hasConfirmedHappyHour(e) && happyHourStatus(e.windows, e.exceptions, e.timezone, now).state === 'now'
       el.type = 'button'
       el.setAttribute('aria-label', `${e.name}, ${e.community.average ? `score ${formatScore(e.community.average)}` : 'not yet rated'}`)
       el.className = `flex h-8 min-w-8 items-center justify-center gap-1 rounded-full px-2 text-[13px] font-extrabold shadow-float ring-2 ring-white ${live ? 'bg-success text-white' : 'bg-choc text-butter'}`
