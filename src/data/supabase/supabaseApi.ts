@@ -34,29 +34,15 @@ import {
   type UserCard,
 } from '../api'
 import type { LatLng } from '@/core/listing'
+import { EST_SELECT, SEARCH_LIMIT, nearbyArgs, searchOrFilter, searchTerm } from './queries'
+
+export { searchTerm }
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
-// Explicit public columns: pipeline internals are not readable through the public API.
-const EST_COLUMNS =
-  'id, slug, name, kind, market_id, neighborhood, city, state, address, postal_code, lat, lng, timezone, phone, website, description, ' +
-  'price_level, amenities, hh_status, hh_verified_at, hh_source_note, status, is_demo, created_at, updated_at, attribution, ' +
-  'business_hours, hh_source_url, hh_last_confirmed_at, hh_restrictions'
-const EST_SELECT = `${EST_COLUMNS}, happy_hour_windows(*), schedule_exceptions(*), happy_hour_specials(*), establishment_photos(*), establishment_stats(*)`
 const VISIT_SELECT = '*, rating_scores(category_key, score), visit_tags(tag), visit_notes(body), reviews(body, status), visit_photos(storage_path)'
 
 const yesterdayDate = () => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-
-/** Characters with meaning in PostgREST filter syntax are dropped; the term is matched as plain text. */
-export function searchTerm(query: string): string | null {
-  const terms = query
-    .normalize('NFKC')
-    .replace(/["\\*%,()]/g, ' ')
-    .split(/\s+/)
-    .filter((t) => t.length >= 2)
-    .sort((a, b) => b.length - a.length)
-  return terms[0] ?? null
-}
 
 function one<T>(v: T | T[] | null | undefined): T | null {
   if (Array.isArray(v)) return v[0] ?? null
@@ -319,7 +305,7 @@ export class SupabaseApi implements Api {
     // No filters on embedded resources here: PostgREST cannot apply them to an RPC result.
     const rows = check(
       await this.client
-        .rpc('nearby_establishments', { p_lat: center.lat, p_lng: center.lng, p_radius_m: Math.round(radiusMiles * 1609.34), p_limit: 300 })
+        .rpc('nearby_establishments', nearbyArgs(center, radiusMiles))
         .select(EST_SELECT)
         .eq('status', 'published'),
     ) as Row[]
@@ -329,15 +315,14 @@ export class SupabaseApi implements Api {
   async searchEstablishments(query: string) {
     const term = searchTerm(query)
     if (!term) return []
-    const like = `"*${term}*"`
     const rows = check(
       await this.client
         .from('establishments')
         .select(EST_SELECT)
         .eq('status', 'published')
-        .or(`name.ilike.${like},city.ilike.${like},neighborhood.ilike.${like},address.ilike.${like}`)
+        .or(searchOrFilter(term))
         .order('name')
-        .limit(200),
+        .limit(SEARCH_LIMIT),
     )
     return rows.map(mapEstablishment)
   }

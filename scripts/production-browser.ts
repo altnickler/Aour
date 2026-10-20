@@ -15,6 +15,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium, devices, type BrowserContext, type Page } from '@playwright/test'
+// The same request definitions the web app uses (asserted equal in tests/unit/supabase-api.test.ts).
+import { restRequests } from '../src/data/supabase/queries'
 
 const SITE = (process.env.SITE_URL || 'https://aour.mute-frost-03a9.workers.dev').replace(/\/+$/, '')
 const SHOTS = process.env.SHOT_DIR || 'production-screenshots'
@@ -28,13 +30,6 @@ const TOWNS = [
   { name: 'Jensen Beach', lat: 27.2545, lng: -80.2298 },
   { name: 'Hobe Sound', lat: 27.0595, lng: -80.1364 },
 ]
-
-// Must match src/data/supabase/supabaseApi.ts.
-const EST_COLUMNS =
-  'id, slug, name, kind, market_id, neighborhood, city, state, address, postal_code, lat, lng, timezone, phone, website, description, ' +
-  'price_level, amenities, hh_status, hh_verified_at, hh_source_note, status, is_demo, created_at, updated_at, attribution, ' +
-  'business_hours, hh_source_url, hh_last_confirmed_at, hh_restrictions'
-const EST_SELECT = `${EST_COLUMNS}, happy_hour_windows(*), schedule_exceptions(*), happy_hour_specials(*), establishment_photos(*), establishment_stats(*)`
 
 const failures: string[] = []
 /** Real venue names the public API returned near each town (what the screens must show). */
@@ -75,40 +70,30 @@ async function api() {
     if (!res.ok) failures.push(`${label}: HTTP ${res.status} ${text.slice(0, 200)}`)
     return rows
   }
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-  const sel = encodeURIComponent(EST_SELECT.replace(/\s+/g, ''))
   await call('markets (app query)', 'markets?select=*&order=name')
   for (const t of TOWNS) {
-    const rows = await call(
-      `nearby ${t.name} 5 mi (exact app query)`,
-      `rpc/nearby_establishments?select=${sel}&status=eq.published`,
-      { p_lat: t.lat, p_lng: t.lng, p_radius_m: Math.round(5 * 1609.34), p_limit: 300 },
-    )
+    const req = restRequests.nearby(t, 5)
+    const rows = await call(`nearby ${t.name} 5 mi (app request)`, req.path, req.body)
     if (rows && rows.length === 0) failures.push(`nearby ${t.name}: 0 rows`)
     expected.set(t.name, (rows ?? []).map((r) => String(r.name)))
   }
-  await call(`name search "${SEARCH}" (anon)`, `establishments?select=id,name,city,status,hh_status&name=ilike.*${encodeURIComponent(SEARCH)}*`)
-  const term = SEARCH.split(/\s+/).sort((a, b) => b.length - a.length)[0]
-  const like = encodeURIComponent(`"*${term}*"`)
-  await call(
-    `app search "${SEARCH}" (exact app query)`,
-    `establishments?select=${sel}&status=eq.published&or=(name.ilike.${like},city.ilike.${like},neighborhood.ilike.${like},address.ilike.${like})&order=name&limit=200`,
-  )
-  // The old request shape, kept to show the original failure is understood (expected: HTTP 400).
-  const old = await fetch(`${url}/rest/v1/rpc/nearby_establishments?select=${sel}&status=eq.published&schedule_exceptions.date=gte.${yesterday}`, {
-    method: 'POST', headers, body: JSON.stringify({ p_lat: TOWNS[0].lat, p_lng: TOWNS[0].lng, p_radius_m: 8047, p_limit: 300 }),
-  })
-  out(`- previous app request (before the fix), for reference: HTTP ${old.status} ${(await old.text()).slice(0, 120)}`)
+  const search = restRequests.search(SEARCH)
+  if (search) {
+    const rows = await call(`search "${SEARCH}" (app request)`, search.path)
+    if (!rows?.some((r) => String(r.name).toLowerCase().includes(SEARCH.toLowerCase()))) failures.push(`search API did not return "${SEARCH}"`)
+  }
   return v
 }
 
 interface Log {
   responses: string[]
   errors: string[]
+  /** Venue names in the listing responses this page itself received. */
+  names: Set<string>
 }
 
 function watch(page: Page): Log {
-  const log: Log = { responses: [], errors: [] }
+  const log: Log = { responses: [], errors: [], names: new Set() }
   page.on('console', (m) => {
     if (m.type() === 'error' || m.type() === 'warning') log.errors.push(`console.${m.type()}: ${m.text().slice(0, 300)}`)
   })
@@ -123,7 +108,10 @@ function watch(page: Page): Log {
       const body = await r.text().catch(() => '')
       try {
         const j = JSON.parse(body)
-        if (Array.isArray(j)) detail = ` — ${j.length} rows`
+        if (Array.isArray(j)) {
+          detail = ` — ${j.length} rows`
+          if (/nearby_establishments|\/establishments$/.test(u.pathname)) for (const r of j) if (r?.name) log.names.add(String(r.name))
+        }
       } catch {
         /* not JSON */
       }
@@ -138,10 +126,13 @@ function visibleNames(text: string, names: string[]): string[] {
   return names.filter((n) => n.length > 3 && text.includes(n))
 }
 
-function requireNames(where: string, text: string, names: string[]) {
-  const seen = visibleNames(text, names)
-  out(`Real venues visible: ${seen.length} — ${seen.slice(0, 8).join(' · ') || 'none'}`)
+/** Real names from the direct API probe and from the page's own API responses must be on screen. */
+function requireNames(where: string, text: string, names: string[], log: Log) {
+  const all = [...new Set([...names, ...log.names])]
+  const seen = visibleNames(text, all)
+  out(`Real venues visible: ${seen.length} (of ${all.length} returned) — ${seen.slice(0, 10).join(' · ') || 'none'}`)
   if (!seen.length) failures.push(`${where}: no real venue names visible`)
+  return seen
 }
 
 async function snapshot(page: Page, log: Log, name: string) {
@@ -182,7 +173,7 @@ async function browser(expectCommit: string | undefined) {
     await page.getByRole('button', { name: /show me happy hours/i }).click()
   }
   const discover = await snapshot(page, log, '02-discover-no-location')
-  requireNames('Discover without location (default city)', discover, expected.get('Stuart') ?? [])
+  requireNames('Discover without location (default city)', discover, expected.get('Stuart') ?? [], log)
   if (/Something went wrong|Couldn't load/i.test(discover)) failures.push('Discover shows an error')
 
   await page.goto(`${SITE}/search`, { waitUntil: 'domcontentloaded' })
@@ -205,7 +196,7 @@ async function browser(expectCommit: string | undefined) {
   await page.goto(SITE, { waitUntil: 'domcontentloaded' })
   await page.reload({ waitUntil: 'domcontentloaded' })
   const reloaded = await snapshot(page, log, '04-discover-after-reload')
-  requireNames('Discover after reload', reloaded, expected.get('Stuart') ?? [])
+  requireNames('Discover after reload', reloaded, expected.get('Stuart') ?? [], log)
   await ctx.browser()?.close()
 
   out('\n## 3. With location shared, per launch town')
@@ -220,7 +211,7 @@ async function browser(expectCommit: string | undefined) {
     const start = p.getByRole('button', { name: /show me happy hours/i })
     if (await start.isVisible().catch(() => false)) await start.click()
     const text = await snapshot(p, l, `05-${t.name.toLowerCase().replace(/\s+/g, '-')}-located`)
-    requireNames(`Discover near ${t.name} (location shared)`, text, expected.get(t.name) ?? [])
+    requireNames(`Discover near ${t.name} (location shared)`, text, expected.get(t.name) ?? [], l)
     await c.browser()?.close()
   }
 }
