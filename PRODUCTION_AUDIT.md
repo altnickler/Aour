@@ -1,5 +1,26 @@
 # Production audit
 
+## Incident 2026-10-20: Discover and Search empty in production — fixed and verified live
+
+- **Root cause (captured from the live site, run 39503884940).** Every listing request failed with HTTP 400 `column pgrst_call.date does not exist`.
+  - The app asked the `nearby_establishments` RPC to filter an embedded table (`schedule_exceptions.date=gte.…`), which PostgREST cannot apply to an RPC result.
+  - Discover showed "Something went wrong". Search filtered the same failed list, so it had nothing to search.
+  - The database, security rules, data and deployed bundle were all fine: an anonymous table read of "Black Marlin" returned it, and the live site was running the latest build.
+- **Fix.**
+  - No embedded filters on the RPC.
+  - New search over all published listings by name, city or address. It needs no location or sign-in.
+  - Errors and empty results now read differently.
+  - Unconfirmed venues are listed (labelled) instead of hidden.
+  - App and production check share one request definition (`src/data/supabase/queries.ts`), and a unit test asserts they match.
+- **Verified live (`production-browser.yml` run 39509632426, commit 3f1e075).** Signed-out visitor, iPhone 13 viewport, with and without location:
+  - Search finds "Black Marlin", and "Natures Way Cafe" outside the default view.
+  - Discover shows real venues in Stuart, Palm City, Jensen Beach and Hobe Sound, including after a reload.
+- **Happy-hour quality.**
+  - The text reader had taken opening hours, lunch, delivery, band and event times, gift cards, dinners and FAQ questions for happy hours.
+  - These are now skipped while reading pages.
+  - Unusual schedules (overlaps, over 6 hours, before 11 am) show as "Needs verification" or "Unconfirmed" and are queued for admin review.
+  - All automated listings were re-checked (`recheck-hh`, `clean-hh`).
+
 ## Live discovery results — 2026-10-16 (GitHub Actions, service role, read-only reports)
 
 - **Database:** all five migrations are applied, including `20261017000200_discovery_catchup.sql`. Internal columns are hidden from the public API. Status runs 38944876401 and later.
