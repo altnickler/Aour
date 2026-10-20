@@ -314,6 +314,19 @@ describe('enrichment from a venue website', () => {
     expect((await row(v.id)).hh_status).toBe('establishment_reported')
   })
 
+  it('shows an unusual schedule as needing verification and queues it for an admin', async () => {
+    const v = await venue()
+    const page = `<html><body><h2>Happy Hour</h2><p>Half price drinks | 3-6pm daily | bar only</p><p>Happy hour menu items | 3-5pm daily</p><p>$5 Well Drinks</p></body></html>`
+    const web = fakeWeb(siteRoutes(v.base, { '/': HOME, '/happy-hour': page }))
+    const r = await enrichEstablishment(v.id, deps(web))
+    expect(r.action).toBe('apply')
+    const e = await row(v.id)
+    expect(e.hh_status).toBe('unverified')
+    const pending = (await pool.query(`select decision_reason from public.hh_findings where establishment_id = $1 and status = 'pending'`, [v.id])).rows
+    expect(pending).toHaveLength(1)
+    expect(pending[0].decision_reason).toMatch(/overlapping times/)
+  })
+
   it('queues unparseable happy-hour mentions for a human when AI extraction is off', async () => {
     const v = await venue()
     const web = fakeWeb(siteRoutes(v.base, { '/': HOME, '/happy-hour': fx('ambiguous.html') }))

@@ -10,6 +10,7 @@ import { isAllowed, parseRobots, robotsFromResponse } from '@/core/ingest/robots
 import { canSpend, isCrawlableWebsite, isStale, nextCheckAt, politeDelayMs } from '@/core/ingest/refresh'
 import { bboxAround, fsqToCandidate, isQuickServiceChain, kindFromCategories, kindFromOverture, osmToCandidate, overpassQuery, overtureToCandidate, storageAllowed, type OsmElement } from '@/core/ingest/providers'
 import type { HappyHourFinding } from '@/core/ingest/types'
+import { questionableReasons } from '@/core/ingest/quality'
 import { happyHourStatus } from '@/core/schedule'
 
 const FIX = join(import.meta.dirname, '..', 'fixtures', 'ingest')
@@ -388,5 +389,70 @@ describe('provider adapters', () => {
     expect(kindFromCategories(['fast_food_restaurant'])).toBeNull()
     expect(kindFromCategories(['coffee_shop'])).toBeNull()
     expect(kindFromCategories(['winery'])).toBe('wine_bar')
+  })
+})
+
+// Shapes seen in the production audit of 2026-10-20 (fictional text, no real venue).
+describe('happy-hour plausibility', () => {
+  const NOW = '2026-10-20T12:00:00Z'
+  const read = (text: string) => validateFinding(extractFromText(text, 'https://venue.example/', NOW)!).finding
+
+  it('ignores opening hours, delivery, band and dated-event times printed near a happy-hour heading', () => {
+    const f = read(
+      [
+        'Happy Hour',
+        'Weekdays 3pm - 5:30pm',
+        '50% off selected apps',
+        'Hours',
+        'Mon - Thurs 11:30 AM - 9 PM',
+        'For Delivery from 3 - 9 PM, please call',
+        'SAT, OCT 17 · (6–10 PM)',
+        'Thursday jam night: happy hour pricing til close, Jam 7-8, band 8-9',
+        'Open 7 days a week 4-10pm',
+      ].join('\n'),
+    )
+    expect(f.windows).toEqual([{ days: [1, 2, 3, 4, 5], start: '15:00', end: '17:30', label: null }])
+  })
+
+  it('keeps happy-hour deals but not gift cards, events, dinners, questions or lunch', () => {
+    const f = read(
+      [
+        'Happy Hour daily 4-6pm',
+        '$5 Well Drinks',
+        '$1 off draft beers',
+        'Purchase a $500 Gift Card for $400!',
+        '$80 pp. + tax & service fee',
+        '3-course spaghetti dinner $29',
+        'Are the $6 drink deals available for dine-in only?',
+        'Famous $6.99 Lunch',
+        'Upgrade to lobster $45',
+      ].join('\n'),
+    )
+    expect(f.specials.map((s) => s.title)).toEqual(['Well Drinks', 'draft beers'])
+  })
+
+  it('flags overlapping, opening-hours-length and early windows', () => {
+    expect(questionableReasons({ windows: [{ days: [1, 2, 3, 4, 5], start: '16:00', end: '18:00', label: null }], specials: [] })).toEqual([])
+    expect(questionableReasons({ windows: [{ days: [5, 6], start: '21:00', end: '00:30', label: null }], specials: [] })).toEqual([])
+    const overlap = questionableReasons({
+      windows: [
+        { days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', label: null },
+        { days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '17:00', label: null },
+      ],
+      specials: [],
+    })
+    expect(overlap.some((r) => r.startsWith('overlapping times on Sun'))).toBe(true)
+    expect(questionableReasons({ windows: [{ days: [1], start: '11:30', end: '21:00', label: null }], specials: [] })[0]).toMatch(/longer than a typical happy hour/)
+    expect(questionableReasons({ windows: [{ days: [1], start: '10:00', end: '12:00', label: null }], specials: [] })[0]).toMatch(/earlier than a typical happy hour/)
+  })
+
+  it('never shows a questionable schedule as confirmed', () => {
+    const now = new Date(NOW)
+    const base = { sourceKind: 'official_website' as const, method: 'pattern' as const, sourceUrl: 'https://venue.example/hh', specials: [], restrictions: [], evidence: [], sourcePublishedAt: null, checkedAt: NOW, mentionedButUnparsed: false }
+    const ok = assess([{ ...base, windows: [{ days: [1, 2, 3, 4, 5], start: '16:00', end: '18:00', label: null }] }], now)
+    expect(ok.status).toBe('establishment_reported')
+    const odd = assess([{ ...base, windows: [{ days: [1, 2, 3, 4], start: '11:30', end: '21:00', label: null }, { days: [1, 2, 3, 4, 5], start: '15:00', end: '17:30', label: null }] }], now)
+    expect(odd.status).toBe('unverified')
+    expect(odd.reasons.join(' ')).toMatch(/needs review: .*overlapping/)
   })
 })

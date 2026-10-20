@@ -7,6 +7,7 @@
  */
 import { validateWindow } from '../schedule'
 import type { HappyHourFinding } from './types'
+import { notASpecial } from './quality'
 
 const norm = (s: string) => s.toLowerCase().replace(/[’']/g, "'").replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim()
 
@@ -33,6 +34,10 @@ export function validateFinding(f: HappyHourFinding, sourceText?: string): Valid
     }
     if (s.price !== null && !/(\$\s?\d|%|half|1\/2|bogo|buy one|2[\s-]for|two[\s-]for)/i.test(s.price)) {
       errors.push(`special ${i}: price "${s.price}" is not a published price`)
+      return false
+    }
+    if (notASpecial(s, f.evidence.find((e) => e.field === `special:${i}`)?.quote)) {
+      errors.push(`special ${i}: "${s.title}" is not a happy-hour deal (gift card, event, meal, question or over $20)`)
       return false
     }
     return true

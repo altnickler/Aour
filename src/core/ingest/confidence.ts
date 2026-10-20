@@ -7,6 +7,7 @@
  *   confidence = reliability(source, method) × recency(age) + corroboration bonus
  *   capped at 0.5 when credible sources disagree (and the conflict is flagged).
  */
+import { questionableReasons } from './quality'
 import type { ExtractionMethod, FindingSourceKind, HappyHourFinding, HappyHourStatus } from './types'
 import { findingFingerprint, schedulesAgree } from './validate'
 
@@ -87,6 +88,12 @@ export function assess(findings: readonly HappyHourFinding[], now: Date, adminVe
   else if (top.f.sourceKind === 'official_website' || top.f.sourceKind === 'partner_feed') status = confidence >= 0.6 ? 'establishment_reported' : 'unverified'
   else if (top.f.sourceKind === 'osm' || top.f.sourceKind === 'user') status = 'community_reported'
   else status = 'unverified'
+  // Unusual schedules (overlaps, opening-hours-length windows…) are never shown as confirmed.
+  const questionable = questionableReasons(top.f)
+  if (questionable.length && (status === 'establishment_reported' || status === 'community_reported')) {
+    status = 'unverified'
+    reasons.push(`needs review: ${questionable.join('; ')}`)
+  }
   reasons.push(`best source: ${top.f.sourceKind}/${top.f.method}`)
   return { status, confidence: round2(confidence), conflict, primary: top.f, reasons }
 }

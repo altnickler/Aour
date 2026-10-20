@@ -4,6 +4,7 @@
  * record that nothing changed. Facts are never invented: no information ⇒ no finding.
  */
 import { assess, decideApply } from '@/core/ingest/confidence'
+import { questionableReasons } from '@/core/ingest/quality'
 import { extractHappyHour, findCandidateLinks } from '@/core/ingest/extract'
 import { isCrawlableWebsite, nextCheckAt, type RefreshOutcome } from '@/core/ingest/refresh'
 import type { HappyHourFinding } from '@/core/ingest/types'
@@ -158,6 +159,11 @@ export async function enrichEstablishment(id: string, deps: EnrichDeps): Promise
     const assessment = assess([best, ...previous], now())
     const decision = decideApply(best, target, assessment)
     const res = await store.recordFinding(id, best, decision.action, { ...assessment, reason: [decision.reason, ...assessment.reasons].join('; ') }, findingFingerprint(best))
+    // Shown as "Needs verification" (never as confirmed); an admin also gets it to review.
+    const questionable = questionableReasons(best)
+    if (questionable.length && decision.action === 'apply') {
+      await store.recordFinding(id, best, 'review', { ...assessment, reason: `Unusual schedule, please check: ${questionable.join('; ')}` }, findingFingerprint(best))
+    }
     const outcome: RefreshOutcome = decision.action === 'touch' ? 'unchanged' : 'changed'
     return { outcome, action: res.action, reason: decision.reason, pages, nextAt: await schedule(outcome, true) }
   }
@@ -169,6 +175,9 @@ export async function enrichEstablishment(id: string, deps: EnrichDeps): Promise
       sourcePublishedAt: null, checkedAt, mentionedButUnparsed: true,
     }
     const res = await store.recordFinding(id, finding, 'review', { status: 'unverified', confidence: 0, conflict: false, reason: 'happy hour mentioned but details not machine-readable' }, findingFingerprint(finding))
+    // Details we showed earlier from this website can no longer be read from it: stop presenting
+    // them as current (kept, not deleted) until an admin reviews the queued finding.
+    if (target.hasData && hadWebsiteSource(target)) await store.markOutdated(id, 'the venue website mentions happy hour but its details need checking')
     return { outcome: 'changed', action: res.action, reason: 'mentioned but unparsed; queued for review', pages, nextAt: await schedule('changed', true) }
   }
 

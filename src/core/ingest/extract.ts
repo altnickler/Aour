@@ -10,6 +10,7 @@
  */
 import { parseDays, parseOsmOpeningHours, parseTimeRange, TIME_RANGE_RE } from './timeparse'
 import type { Evidence, ExtractedSpecial, ExtractedWindow, HappyHourFinding } from './types'
+import { notASpecial } from './quality'
 
 // ---------------------------------------------------------------------------
 // HTML → text
@@ -114,6 +115,23 @@ export function classifySpecial(text: string): ExtractedSpecial['kind'] {
 // Text pattern extraction
 // ---------------------------------------------------------------------------
 const HH_RE = /\b(reverse\s+)?happy\s*hours?\b/i
+/**
+ * A time range on such a line is something else — opening/kitchen hours, lunch, delivery, live
+ * music, a dated event — even when it sits just below a "happy hour" heading. (Production audit,
+ * 2026-10-20: "MON - THURS 11:30 AM - 9 PM", "For Delivery from 3 - 9 PM", "Jam 7-8".)
+ */
+const NOT_HH_STRONG = /\b(deliver(y|ies)?|take-?out|curbside|lunch|brunch|breakfast|kitchen|band|jam|tickets?|doors)\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(st|nd|rd|th)?\b/i
+/** …and these only when the line itself does not mention happy hour. */
+const NOT_HH_WEAK = /\b(open|opens|opening|hours|dinner|music|dj|trivia|karaoke|bingo|reservations?|events?|closed)\b/i
+/** A heading right above the times that names something other than happy hour. */
+const NOT_HH_HEADING = /^(our\s+)?(hours|hours of operation|business hours|opening hours|open|kitchen|location|delivery|lunch|brunch|dinner|events?)\b/i
+
+function notHappyHourTime(line: string, previous: string | undefined): boolean {
+  if (NOT_HH_STRONG.test(line)) return true
+  if (HH_RE.test(line)) return false
+  if (NOT_HH_WEAK.test(line)) return true
+  return !!previous && NOT_HH_HEADING.test(previous.trim()) && !HH_RE.test(previous)
+}
 const HAS_TIME_RANGE = new RegExp(TIME_RANGE_RE.source, 'i')
 const MAX_BLOCK_LINES = 14
 
@@ -138,7 +156,8 @@ export function extractFromText(text: string, sourceUrl: string | null, checkedA
       const line = lines[i]
       const days = parseDays(line)
       if (days) lastDays = { days, line: i }
-      for (const m of line.matchAll(TIME_RANGE_RE)) {
+      const skipTimes = notHappyHourTime(line, lines[i - 1])
+      for (const m of skipTimes ? [] : line.matchAll(TIME_RANGE_RE)) {
         const range = parseTimeRange(m[1], m[2])
         const d = days ?? (lastDays && i - lastDays.line <= 2 ? lastDays.days : null)
         if (!range || !d) continue
@@ -159,7 +178,8 @@ export function extractFromText(text: string, sourceUrl: string | null, checkedA
       const price = PRICE_RE.exec(line)
       if (price && line.length <= 160 && !(usedLines.has(i) && !DRINK_WORDS.test(line) && !FOOD_WORDS.test(line))) {
         const title = cleanTitle(line, price[0])
-        if (title.length >= 3 && title.length <= 80 && !HH_RE.test(title) && !HAS_TIME_RANGE.test(title)) {
+        const special = { title, price: price[0] }
+        if (title.length >= 3 && title.length <= 80 && !HH_RE.test(title) && !HAS_TIME_RANGE.test(title) && !notASpecial(special, line)) {
           if (!specials.some((s) => s.title.toLowerCase() === title.toLowerCase())) {
             specials.push({ kind: classifySpecial(line), title, price: price[0].replace(/\s+/g, ' ').trim(), description: null })
             evidence.push({ field: `special:${specials.length - 1}`, quote: line })

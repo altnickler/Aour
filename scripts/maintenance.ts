@@ -351,7 +351,33 @@ async function hhAudit() {
   }
 }
 
+/**
+ * Re-read the website of every automation-managed listing that shows happy-hour details, so the
+ * current extraction and plausibility rules apply to them now (forgets cached page validators and
+ * schedules an immediate check). Admin-managed listings are untouched; nothing is deleted.
+ */
+async function recheckHappyHours() {
+  const apply = process.argv.includes('--apply')
+  const db = await supabase()
+  const rows = await db.all<{ id: string; name: string; hh_status: string }>(
+    "establishments?select=id,name,hh_status&hh_status=neq.none&hh_managed_by=eq.auto&status=in.(published,draft)&order=name",
+  )
+  console.log(`${rows.length} listings with automated happy-hour details: ${rows.map((r) => `${r.name} (${r.hh_status})`).join(' · ')}`)
+  if (!apply) {
+    console.log('\nDry run: nothing changed. Run "recheck-hh --apply" to apply.')
+    return
+  }
+  const now = new Date().toISOString()
+  for (let i = 0; i < rows.length; i += 100) {
+    const ids = rows.slice(i, i + 100).map((r) => r.id).join(',')
+    await db.req('PATCH', `source_documents?establishment_id=in.(${ids})`, { etag: null, last_modified: null, content_hash: null }, 'return=minimal')
+    await db.req('PATCH', `establishments?id=in.(${ids})`, { next_enrich_at: now }, 'return=minimal')
+  }
+  console.log(`\nApplied: scheduled ${rows.length} listings for an immediate website re-check.`)
+}
+
 const tasks: Record<string, () => Promise<void>> = {
+  'recheck-hh': recheckHappyHours,
   'hh-audit': hhAudit,
   'refresh-outdated': refreshOutdated,
   diagnose,
