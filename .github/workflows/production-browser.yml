@@ -1,0 +1,38 @@
+name: Production browser check
+
+# Opens the deployed site as an anonymous visitor (iPhone viewport) and calls the public API
+# with the public anon key only. Uploads screenshots. Uses no secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      search:
+        description: Name of a real imported venue to search for
+        default: Black Marlin
+      expect_pass:
+        description: Fail the run when a visitor cannot see listings (1) or only report (0)
+        default: '0'
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://aour.mute-frost-03a9.workers.dev' }}
+      SEARCH_NAME: ${{ github.event.inputs.search || 'Black Marlin' }}
+      EXPECT_PASS: ${{ github.event.inputs.expect_pass || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx tsx scripts/production-browser.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-screenshots
+          path: production-screenshots
+          retention-days: 14
