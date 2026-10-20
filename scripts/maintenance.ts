@@ -404,9 +404,12 @@ async function cleanHappyHours() {
   const latest = new Map<string, Row>()
   for (const r of rows) if (!latest.has(r.establishment_id)) latest.set(r.establishment_id, r)
   let changed = 0
+  // How cautious a label is; this task may only keep or raise caution, never lower it.
+  const caution: Record<string, number> = { establishment_reported: 0, community_reported: 0, unverified: 1, outdated: 2 }
   for (const e of ests) {
     const r = latest.get(e.id)
-    if (!r) continue
+    // An "outdated" mark comes from a newer website check than the saved details: it wins.
+    if (!r || e.hh_status === 'outdated') continue
     const original: HappyHourFinding = {
       sourceKind: r.source_kind as HappyHourFinding['sourceKind'], method: r.method as HappyHourFinding['method'], sourceUrl: r.source_url,
       windows: r.windows, specials: r.specials, restrictions: r.restrictions ?? [], evidence: r.evidence ?? [],
@@ -429,11 +432,13 @@ async function cleanHappyHours() {
     }
     const cleaned = validateFinding(pruned).finding
     const hasFacts = cleaned.windows.length > 0 || cleaned.specials.length > 0
-    const assessment = assess([cleaned], new Date())
+    const assessed = assess([cleaned], new Date())
+    const status = (caution[assessed.status] ?? 0) >= (caution[e.hh_status] ?? 0) ? assessed.status : (e.hh_status as typeof assessed.status)
+    const assessment = { ...assessed, status }
     const questionable = questionableReasons(cleaned)
     const fp = findingFingerprint(cleaned)
     const dropped = original.windows.length - cleaned.windows.length + original.specials.length - cleaned.specials.length
-    if (hasFacts && fp === e.hh_fingerprint && assessment.status === e.hh_status) continue
+    if (hasFacts && dropped === 0 && assessment.status === e.hh_status) continue
     changed++
     console.log(`${e.name}: ${e.hh_status} → ${hasFacts ? assessment.status : 'outdated'}; dropped ${dropped} item(s)${questionable.length ? `; review: ${questionable.join('; ')}` : ''}`)
     if (!apply) continue
