@@ -126,7 +126,7 @@ const NOT_HH_WEAK = /\b(open|opens|opening|hours|dinner|music|dj|trivia|karaoke|
 /** A heading right above the times that names something other than happy hour. */
 const NOT_HH_HEADING = /^(our\s+)?(hours|hours of operation|business hours|opening hours|open|kitchen|location|delivery|lunch|brunch|dinner|events?)\b/i
 
-function notHappyHourTime(line: string, previous: string | undefined): boolean {
+export function notHappyHourTime(line: string, previous: string | undefined): boolean {
   if (NOT_HH_STRONG.test(line)) return true
   if (HH_RE.test(line)) return false
   if (NOT_HH_WEAK.test(line)) return true

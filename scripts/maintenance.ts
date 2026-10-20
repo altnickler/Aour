@@ -20,6 +20,13 @@ import { bboxAround, overtureToCandidate, type OvertureRow } from '../src/core/i
 import { openOverture, overtureSql, primaryCategoryExpr } from '../src/pipeline/providers/overture'
 import { isAllowed, robotsFromResponse } from '../src/core/ingest/robots'
 import { looksLikeChallenge, USER_AGENT } from '../src/pipeline/fetcher'
+import { createStore } from '../src/pipeline/store'
+import { supabaseRpc } from '../src/pipeline/rest'
+import { notHappyHourTime } from '../src/core/ingest/extract'
+import { findingFingerprint, validateFinding } from '../src/core/ingest/validate'
+import { assess } from '../src/core/ingest/confidence'
+import { questionableReasons } from '../src/core/ingest/quality'
+import type { HappyHourFinding } from '../src/core/ingest/types'
 
 const task = process.argv[2] ?? 'diagnose'
 const MARKET = { lat: Number(process.env.MARKET_LAT ?? 27.1975), lng: Number(process.env.MARKET_LNG ?? -80.2528), radiusMiles: Number(process.env.MARKET_RADIUS ?? 15) }
@@ -89,7 +96,7 @@ async function supabase() {
       if (page.length < 1000) return rows
     }
   }
-  return { req, all }
+  return { req, all, url, key }
 }
 
 async function reclassify() {
@@ -376,7 +383,75 @@ async function recheckHappyHours() {
   console.log(`\nApplied: scheduled ${rows.length} listings for an immediate website re-check.`)
 }
 
+/**
+ * Apply the current reading rules to the happy-hour details already saved, without re-fetching
+ * websites (some cannot be re-read right now): drop times and "specials" that are not happy hour,
+ * re-assess, and record the result through the same pipeline function as a website check —
+ * questionable schedules become "Needs verification" and are queued for admin review; listings
+ * left with nothing are marked outdated (kept, not deleted). Admin-managed listings are untouched.
+ */
+async function cleanHappyHours() {
+  const apply = process.argv.includes('--apply')
+  const db = await supabase()
+  const store = createStore(supabaseRpc(db.url, db.key))
+  const ests = await db.all<{ id: string; name: string; hh_status: string; hh_fingerprint: string | null }>(
+    "establishments?select=id,name,hh_status,hh_fingerprint&hh_status=neq.none&hh_managed_by=eq.auto&status=in.(published,draft)&order=name",
+  )
+  type Row = { establishment_id: string; source_kind: string; method: string; source_url: string | null; windows: HappyHourFinding['windows']; specials: HappyHourFinding['specials']; restrictions: string[]; evidence: HappyHourFinding['evidence']; source_published_at: string | null; checked_at: string }
+  const rows = await db.all<Row>(
+    'hh_findings?select=establishment_id,source_kind,method,source_url,windows,specials,restrictions,evidence,source_published_at,checked_at&status=eq.applied&order=checked_at.desc',
+  )
+  const latest = new Map<string, Row>()
+  for (const r of rows) if (!latest.has(r.establishment_id)) latest.set(r.establishment_id, r)
+  let changed = 0
+  for (const e of ests) {
+    const r = latest.get(e.id)
+    if (!r) continue
+    const original: HappyHourFinding = {
+      sourceKind: r.source_kind as HappyHourFinding['sourceKind'], method: r.method as HappyHourFinding['method'], sourceUrl: r.source_url,
+      windows: r.windows, specials: r.specials, restrictions: r.restrictions ?? [], evidence: r.evidence ?? [],
+      sourcePublishedAt: r.source_published_at, checkedAt: r.checked_at, mentionedButUnparsed: false,
+    }
+    // Times whose source line is opening hours, lunch, delivery, music or a dated event.
+    const keep = original.windows.map((_, i) => {
+      const lines = (original.evidence.find((x) => x.field === `window:${i}`)?.quote ?? '').split('\n')
+      return !notHappyHourTime(lines[lines.length - 1], lines.length > 1 ? lines[lines.length - 2] : undefined)
+    })
+    const pruned: HappyHourFinding = {
+      ...original,
+      windows: original.windows.filter((_, i) => keep[i]),
+      evidence: original.evidence.flatMap((x) => {
+        const [kind, idx] = x.field.split(':')
+        if (kind !== 'window') return [x]
+        if (!keep[Number(idx)]) return []
+        return [{ ...x, field: `window:${keep.slice(0, Number(idx)).filter(Boolean).length}` }]
+      }),
+    }
+    const cleaned = validateFinding(pruned).finding
+    const hasFacts = cleaned.windows.length > 0 || cleaned.specials.length > 0
+    const assessment = assess([cleaned], new Date())
+    const questionable = questionableReasons(cleaned)
+    const fp = findingFingerprint(cleaned)
+    const dropped = original.windows.length - cleaned.windows.length + original.specials.length - cleaned.specials.length
+    if (hasFacts && fp === e.hh_fingerprint && assessment.status === e.hh_status) continue
+    changed++
+    console.log(`${e.name}: ${e.hh_status} → ${hasFacts ? assessment.status : 'outdated'}; dropped ${dropped} item(s)${questionable.length ? `; review: ${questionable.join('; ')}` : ''}`)
+    if (!apply) continue
+    if (!hasFacts) {
+      await store.markOutdated(e.id, 'saved details were not happy-hour information (opening hours, meals, events or questions)')
+      continue
+    }
+    const reason = ['re-checked with current reading rules', ...assessment.reasons].join('; ')
+    await store.recordFinding(e.id, cleaned, 'apply', { status: assessment.status, confidence: assessment.confidence, conflict: assessment.conflict, reason }, fp)
+    if (questionable.length) {
+      await store.recordFinding(e.id, cleaned, 'review', { status: assessment.status, confidence: assessment.confidence, conflict: assessment.conflict, reason: `Unusual schedule, please check: ${questionable.join('; ')}` }, fp)
+    }
+  }
+  console.log(`\n${changed} of ${ests.length} listings ${apply ? 'updated' : 'would change'}.${apply ? '' : ' Dry run: run "clean-hh --apply" to apply.'}`)
+}
+
 const tasks: Record<string, () => Promise<void>> = {
+  'clean-hh': cleanHappyHours,
   'recheck-hh': recheckHappyHours,
   'hh-audit': hhAudit,
   'refresh-outdated': refreshOutdated,
