@@ -81,14 +81,24 @@ async function api() {
   for (const t of TOWNS) {
     const rows = await call(
       `nearby ${t.name} 5 mi (exact app query)`,
-      `rpc/nearby_establishments?select=${sel}&status=eq.published&schedule_exceptions.date=gte.${yesterday}`,
+      `rpc/nearby_establishments?select=${sel}&status=eq.published`,
       { p_lat: t.lat, p_lng: t.lng, p_radius_m: Math.round(5 * 1609.34), p_limit: 300 },
     )
     if (rows && rows.length === 0) failures.push(`nearby ${t.name}: 0 rows`)
     expected.set(t.name, (rows ?? []).map((r) => String(r.name)))
   }
   await call(`name search "${SEARCH}" (anon)`, `establishments?select=id,name,city,status,hh_status&name=ilike.*${encodeURIComponent(SEARCH)}*`)
-  await call('search_establishments RPC (anon)', 'rpc/search_establishments?select=id,name,city,hh_status', { p_query: SEARCH, p_lat: null, p_lng: null, p_limit: 10 })
+  const term = SEARCH.split(/\s+/).sort((a, b) => b.length - a.length)[0]
+  const like = encodeURIComponent(`"*${term}*"`)
+  await call(
+    `app search "${SEARCH}" (exact app query)`,
+    `establishments?select=${sel}&status=eq.published&or=(name.ilike.${like},city.ilike.${like},neighborhood.ilike.${like},address.ilike.${like})&order=name&limit=200`,
+  )
+  // The old request shape, kept to show the original failure is understood (expected: HTTP 400).
+  const old = await fetch(`${url}/rest/v1/rpc/nearby_establishments?select=${sel}&status=eq.published&schedule_exceptions.date=gte.${yesterday}`, {
+    method: 'POST', headers, body: JSON.stringify({ p_lat: TOWNS[0].lat, p_lng: TOWNS[0].lng, p_radius_m: 8047, p_limit: 300 }),
+  })
+  out(`- previous app request (before the fix), for reference: HTTP ${old.status} ${(await old.text()).slice(0, 120)}`)
   return v
 }
 
