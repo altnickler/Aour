@@ -322,7 +322,37 @@ async function refreshOutdated() {
   console.log(`\nApplied: cleared ${findings.length} page-wide dates, scheduled ${outdated.length} listings for an immediate re-check.`)
 }
 
+/** Read-only: every listing showing happy-hour details, with the page text each fact came from. */
+async function hhAudit() {
+  const db = await supabase()
+  type W = { days: number[]; start: string; end: string; label: string | null }
+  type S = { kind: string; title: string; price: string | null }
+  const findings = await db.all<{ establishment_id: string; source_url: string | null; windows: W[]; specials: S[]; evidence: { field: string; quote: string }[]; status: string; checked_at: string }>(
+    "hh_findings?select=establishment_id,source_url,windows,specials,evidence,status,checked_at&status=in.(applied,approved)&order=checked_at.desc",
+  )
+  const ests = await db.all<{ id: string; name: string; city: string; hh_status: string; status: string }>(
+    "establishments?select=id,name,city,hh_status,status&hh_status=neq.none&order=name",
+  )
+  const latest = new Map<string, (typeof findings)[number]>()
+  for (const f of findings) if (!latest.has(f.establishment_id)) latest.set(f.establishment_id, f)
+  const day = (d: number[]) => d.map((x) => 'SuMoTuWeThFrSa'.slice(x * 2, x * 2 + 2)).join(',')
+  for (const e of ests) {
+    const f = latest.get(e.id)
+    console.log(`\n## ${e.name} (${e.city}) — ${e.hh_status}, listing ${e.status}${f?.source_url ? ` — ${f.source_url}` : ''}`)
+    if (!f) continue
+    for (const [i, w] of f.windows.entries()) {
+      const q = f.evidence.find((x) => x.field === `window:${i}`)?.quote ?? ''
+      console.log(`  window ${day(w.days)} ${w.start}-${w.end}${w.label ? ` (${w.label})` : ''}  ⟵ "${q.replace(/\s+/g, ' ').slice(0, 140)}"`)
+    }
+    for (const [i, sp] of f.specials.entries()) {
+      const q = f.evidence.find((x) => x.field === `special:${i}`)?.quote ?? ''
+      console.log(`  special [${sp.kind}] ${sp.title} — ${sp.price ?? ''}  ⟵ "${q.replace(/\s+/g, ' ').slice(0, 140)}"`)
+    }
+  }
+}
+
 const tasks: Record<string, () => Promise<void>> = {
+  'hh-audit': hhAudit,
   'refresh-outdated': refreshOutdated,
   diagnose,
   reclassify,
